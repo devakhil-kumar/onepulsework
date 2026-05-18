@@ -11,6 +11,7 @@ import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectIsAdmin, selectCanManage} from '@features/auth/authSlice';
 import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListEmployeesQuery,
   useCreateEmployeeMutation,
@@ -447,29 +448,16 @@ export default function EmployeesScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>Employees</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {employees.length > 0 ? `${employees.length} total` : 'Team members'}
-          </AppText>
-        </View>
-        {canCreate && (
+      <AppHeader
+        title="Employees"
+        rightAction={canCreate && (
           <TouchableOpacity
             onPress={() => setModal({mode: 'create'})}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
             <Plus size={20} color="#fff" />
           </TouchableOpacity>
         )}
-      </View>
+      />
 
       {/* Search */}
       <View style={[styles.searchBar, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>

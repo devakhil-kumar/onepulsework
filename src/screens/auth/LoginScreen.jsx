@@ -160,11 +160,12 @@ export default function LoginScreen() {
             {/* Logo mark with glow ring */}
             <View style={styles.logoGlow}>
               <View style={styles.logoBox}>
-                <AppText style={styles.logoText}>OP</AppText>
+                <AppText style={styles.logoText}>CP</AppText>
               </View>
             </View>
 
-            <AppText style={[styles.brandName, {color: C.text}]}>OnePulseWork</AppText>
+            {/* <AppText style={[styles.brandName, {color: C.text}]}>OnePulseWork</AppText> */}
+            <AppText style={[styles.brandName, {color: C.text}]}>CyberPulse</AppText>
             <AppText style={[styles.brandSub, {color: C.muted}]}>
               Workforce management, simplified
             </AppText>

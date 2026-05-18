@@ -15,6 +15,7 @@ import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin} from '@features/auth/authSlice';
 import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListDocumentsQuery,
   useUploadDocumentMutation,
@@ -563,29 +564,16 @@ export default function DocumentsScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>Documents</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {documents.length > 0 ? `${documents.length} files` : 'Company files'}
-          </AppText>
-        </View>
-        {(isAdmin || canManage) && (
+      <AppHeader
+        title="Documents"
+        rightAction={(isAdmin || canManage) && (
           <TouchableOpacity
             onPress={() => setShowUpload(true)}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
             <Plus size={20} color="#fff" />
           </TouchableOpacity>
         )}
-      </View>
+      />
 
       {/* Search */}
       <View style={[styles.searchBar, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>

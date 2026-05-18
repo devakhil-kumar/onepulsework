@@ -9,6 +9,7 @@ import {ArrowLeft, Building2, Clock, DollarSign} from 'lucide-react-native';
 import {colors, spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {AppText, Button, Spinner} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useGetOrgInfoQuery,
   useUpdateOrgInfoMutation,
@@ -544,22 +545,7 @@ export default function OrgSettingsScreen() {
       style={[styles.root, {backgroundColor: colors.background}]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>Organisation</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {org?.name ?? 'Settings'}
-          </AppText>
-        </View>
-      </View>
+      <AppHeader title="Organisation" />
 
       <TabBar active={activeTab} onChange={setTab} />
 

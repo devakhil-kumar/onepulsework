@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Modal,
@@ -8,9 +8,10 @@ import {
   Easing,
   StyleSheet,
   Dimensions,
+  Image,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
+import {getStackNav} from '@navigation/stackNav';
 import {
   Home, Clock, Umbrella, Bell, Users, CalendarDays,
   Banknote, FolderOpen, Briefcase, Megaphone, Calendar,
@@ -107,22 +108,41 @@ function useNavSections() {
   return sections;
 }
 
-export default function DrawerMenu({visible, onClose, activeTab}) {
+const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Payroll', 'PayrollDetail', 'Profile'];
+
+export default function DrawerMenu({visible, onClose}) {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
   const sections = useNavSections();
+
+  // Computed when drawer opens so the active item is always highlighted correctly
+  const [activeTab, setActiveTab] = useState(null);
 
   const slideX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      // Compute which screen is currently active for highlighting
+      const nav = getStackNav();
+      if (nav) {
+        const state = nav.getState();
+        if (state) {
+          if (state.index === 0) {
+            // On the Main (tab) screen — find which tab is active
+            const tabState = state.routes[0].state;
+            setActiveTab(tabState ? (tabState.routes[tabState.index]?.name ?? 'Dashboard') : 'Dashboard');
+          } else {
+            setActiveTab(state.routes[state.index].name);
+          }
+        }
+      }
+
       Animated.parallel([
         Animated.timing(slideX, {
           toValue: 0,
-          duration:280,
+          duration: 280,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -151,17 +171,19 @@ export default function DrawerMenu({visible, onClose, activeTab}) {
     }
   }, [visible, slideX, backdropOpacity]);
 
-  const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Profile'];
-
   function handleNavItem(item) {
     onClose();
+    const nav = getStackNav();
+    if (!nav) return;
+
     if (item.tab) {
-      navigation.navigate('Main', {screen: item.key});
+      // Reset stack to just Main with the correct tab — no buildup
+      nav.reset({index: 0, routes: [{name: 'Main', params: {screen: item.key}}]});
     } else if (STACK_SCREENS.includes(item.key)) {
-      navigation.navigate(item.key);
+      // Reset stack to [Main, TargetScreen] — one back press returns to Dashboard
+      nav.reset({index: 1, routes: [{name: 'Main'}, {name: item.key}]});
     } else {
-      // Screen not yet built — stay on Dashboard
-      navigation.navigate('Main', {screen: 'Dashboard'});
+      nav.reset({index: 0, routes: [{name: 'Main'}]});
     }
   }
 
@@ -204,10 +226,11 @@ export default function DrawerMenu({visible, onClose, activeTab}) {
           {/* Header — gradient-style with brand */}
           <View style={styles.header}>
             <View style={styles.logoMark}>
-              <AppText style={styles.logoText}>OP</AppText>
+              <AppText style={styles.logoText}>CP</AppText>
             </View>
             <View style={styles.headerText}>
-              <AppText style={styles.brandName}>OnePulseWork</AppText>
+              {/* <AppText style={styles.brandName}>OnePulseWork</AppText> */}
+              <AppText style={styles.brandName}>CyberPulse</AppText>
               <AppText style={styles.brandSub}>Workforce Platform</AppText>
             </View>
           </View>
@@ -253,7 +276,11 @@ export default function DrawerMenu({visible, onClose, activeTab}) {
           {/* Footer — user profile */}
           <View style={[styles.footer, {borderTopColor: colors.sidebarBorder}]}>
             <TouchableOpacity
-              onPress={() => { onClose(); navigation.navigate('Profile'); }}
+              onPress={() => {
+                onClose();
+                const nav = getStackNav();
+                nav?.reset({index: 1, routes: [{name: 'Main'}, {name: 'Profile'}]});
+              }}
               style={styles.footerUser}
               activeOpacity={0.7}>
               <Avatar name={user?.fullName} size="sm" />

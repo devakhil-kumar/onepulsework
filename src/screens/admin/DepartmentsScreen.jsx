@@ -8,6 +8,7 @@ import {ArrowLeft, Plus, Edit2, Trash2, Building2} from 'lucide-react-native';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {AppText, Card, Button, Spinner, EmptyState} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListDepartmentsQuery,
   useCreateDepartmentMutation,
@@ -179,27 +180,16 @@ export default function DepartmentsScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={styles.headerTitle}>Departments</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            Organise your workforce
-          </AppText>
-        </View>
-        <TouchableOpacity
-          onPress={() => setModal({mode: 'create'})}
-          style={[styles.addBtn, {backgroundColor: colors.primary}]}>
-          <Plus size={20} color={colors.white} />
-        </TouchableOpacity>
-      </View>
+      <AppHeader
+        title="Departments"
+        rightAction={
+          <TouchableOpacity
+            onPress={() => setModal({mode: 'create'})}
+            style={[styles.addBtn, {backgroundColor: colors.primary}]}>
+            <Plus size={20} color={colors.white} />
+          </TouchableOpacity>
+        }
+      />
 
       {isLoading ? (
         <View style={styles.center}><Spinner /></View>

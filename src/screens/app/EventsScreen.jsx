@@ -11,6 +11,7 @@ import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectIsAdmin} from '@features/auth/authSlice';
 import {AppText, Avatar, Button, Spinner, EmptyState} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListEventsQuery,
   useCreateEventMutation,
@@ -254,29 +255,16 @@ export default function EventsScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={styles.headerTitle}>Events</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            Birthdays, anniversaries & custom events
-          </AppText>
-        </View>
-        {isAdmin && (
+      <AppHeader
+        title="Events"
+        rightAction={isAdmin && (
           <TouchableOpacity
             onPress={() => setShowAdd(true)}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
             <Plus size={20} color="#fff" />
           </TouchableOpacity>
         )}
-      </View>
+      />
 
       {isLoading ? (
         <View style={styles.center}><Spinner /></View>

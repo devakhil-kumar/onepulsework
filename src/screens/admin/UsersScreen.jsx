@@ -9,6 +9,7 @@ import {ArrowLeft, UserPlus, Edit2, Search, Users, X} from 'lucide-react-native'
 import {colors, spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {AppText, Card, Button, Spinner, Avatar, Badge, EmptyState} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListUsersQuery,
   useInviteUserMutation,
@@ -266,25 +267,14 @@ export default function UsersScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>Team Members</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {total} {total === 1 ? 'user' : 'users'}
-          </AppText>
-        </View>
-        <TouchableOpacity onPress={() => setShowInvite(true)} style={[styles.addBtn, {backgroundColor: colors.primary}]}>
-          <UserPlus size={18} color={colors.white} />
-        </TouchableOpacity>
-      </View>
+      <AppHeader
+        title="Team Members"
+        rightAction={
+          <TouchableOpacity onPress={() => setShowInvite(true)} style={[styles.addBtn, {backgroundColor: colors.primary}]}>
+            <UserPlus size={18} color={colors.white} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Search bar */}
       <View style={[styles.searchBar, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>

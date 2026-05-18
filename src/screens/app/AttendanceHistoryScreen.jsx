@@ -12,6 +12,7 @@ import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin} from '@features/auth/authSlice';
 import {AppText, Card, Spinner, Avatar, Badge} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {useGetAttendanceListQuery} from '@features/attendance/attendanceApi';
 import {useListTasksQuery} from '@features/task/taskApi';
 import {useListEmployeesQuery} from '@features/employee/employeeApi';
@@ -377,25 +378,10 @@ export default function AttendanceHistoryScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>
-            Attendance & Task History
-          </AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {loading ? 'Loading…' : `${allDates.length} days with records`}
-          </AppText>
-        </View>
-        {loading && <Spinner size="small" />}
-      </View>
+      <AppHeader
+        title="Attendance History"
+        rightAction={loading && <Spinner size="small" />}
+      />
 
       {/* Period filter chips */}
       <View style={[styles.filterWrap, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>

@@ -3,6 +3,7 @@ import {useColorScheme} from 'react-native';
 import {useAppSelector} from './hooks';
 import {colors as lightColors} from '@theme/colors';
 import {darkColors} from '@theme/darkColors';
+import {skyblueColors} from '@theme/skyblueColors';
 
 const ThemeContext = createContext(lightColors);
 const IsDarkContext = createContext(false);

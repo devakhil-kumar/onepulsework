@@ -15,6 +15,7 @@ import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin, selectCanManage, selectEmployeeId} from '@features/auth/authSlice';
 import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
+import {AppHeader} from '@components/common';
 import {
   useListProjectsQuery, useCreateProjectMutation,
   useUpdateProjectMutation, useDeleteProjectMutation,
@@ -630,29 +631,16 @@ export default function ProjectsScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      {/* Header */}
-      <View style={[styles.header, {
-        paddingTop: insets.top + spacing[2],
-        backgroundColor: colors.surface,
-        borderBottomColor: colors.border,
-      }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{flex: 1}}>
-          <AppText style={[styles.headerTitle, {color: colors.text}]}>Projects</AppText>
-          <AppText style={[styles.headerSub, {color: colors.textSecondary}]}>
-            {isLoading ? 'Loading…' : canViewAll ? `${total} total` : `${total} assigned`}
-          </AppText>
-        </View>
-        {canManage && (
+      <AppHeader
+        title="Projects"
+        rightAction={canManage && (
           <TouchableOpacity
             onPress={() => setShowCreate(true)}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
             <Plus size={20} color="#fff" />
           </TouchableOpacity>
         )}
-      </View>
+      />
 
       {/* Status filter chips */}
       <View style={[styles.filterWrap, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>
