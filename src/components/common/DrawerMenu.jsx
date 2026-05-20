@@ -89,7 +89,7 @@ function useNavSections() {
       label: 'Other',
       items: [
         canDocuments && {key: 'Documents',     label: 'Documents',     Icon: FileText},
-        {key: 'Notifications', label: 'Notifications', Icon: Bell, tab: true},
+        {key: 'Notifications', label: 'Notifications', Icon: Bell},
       ].filter(Boolean),
     },
     isAdmin && {
@@ -108,7 +108,7 @@ function useNavSections() {
   return sections;
 }
 
-const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Payroll', 'PayrollDetail', 'Profile'];
+const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Jobs', 'Payroll', 'PayrollDetail', 'Profile', 'Notifications'];
 
 export default function DrawerMenu({visible, onClose}) {
   const insets = useSafeAreaInsets();

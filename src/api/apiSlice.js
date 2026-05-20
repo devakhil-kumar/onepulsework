@@ -8,7 +8,7 @@ export const apiSlice = createApi({
     'MyStatus', 'Attendance', 'LeaveBalance', 'Leave',
     'Shifts', 'Task', 'Tasks', 'Notifications',
     'OrgRoles', 'Departments', 'Employees', 'Employee', 'Announcements', 'Events', 'Document',
-    'OrgInfo', 'MyEmployee', 'PayrollPolicy', 'Payslip', 'Users', 'Project',
+    'OrgInfo', 'MyEmployee', 'PayrollPolicy', 'Payslip', 'Users', 'Project', 'Job',
   ],
   endpoints: () => ({}), // each feature file injects its own endpoints
 });

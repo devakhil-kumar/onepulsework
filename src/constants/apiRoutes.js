@@ -10,6 +10,8 @@ export const API = {
     ACCEPT_INVITE: `${BASE}/auth/accept-invite`,
     CHANGE_PASSWORD: `${BASE}/auth/change-password`,
     AVATAR: `${BASE}/auth/avatar`,
+    FORGOT_PASSWORD: `${BASE}/auth/forgot-password`,
+    RESET_PASSWORD: `${BASE}/auth/reset-password`,
   },
   EMPLOYEE: {
     LIST: `${BASE}/org/employees`,

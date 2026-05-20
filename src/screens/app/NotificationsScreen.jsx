@@ -55,9 +55,10 @@ function NotifCard({item, onPress}) {
   );
 }
 
-export default function NotificationsScreen() {
+export default function NotificationsScreen({route}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const fromHeader = route?.params?.fromHeader ?? false;
 
   const {data, isLoading, refetch} = useGetNotificationsQuery({}, {pollingInterval: 120000});
   const [markRead]     = useMarkReadMutation();
@@ -68,7 +69,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
-      <AppHeader title="Notifications" unreadCount={unreadCount} />
+      <AppHeader title="Notifications" unreadCount={unreadCount} showBack={fromHeader} />
 
       {isLoading ? (
         <View style={styles.center}><Spinner /></View>

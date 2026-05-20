@@ -7,3 +7,4 @@ export {default as Avatar} from './Avatar';
 export {default as Spinner} from './Spinner';
 export {default as Divider} from './Divider';
 export {default as EmptyState} from './EmptyState';
+export {default as Dropdown} from './Dropdown';

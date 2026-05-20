@@ -8,16 +8,17 @@ import {
   StyleSheet,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Home, Clock, Umbrella, Bell} from 'lucide-react-native';
+import {Home, Clock, Umbrella, Users, Megaphone} from 'lucide-react-native';
 import {fontWeight, spacing} from '@theme';
 import {useColors} from '@app/ThemeContext';
 
 // Static metadata for each possible tab — drives icon + label
 const TAB_META = {
-  Dashboard:     {label: 'Home',       Icon: Home},
+  Dashboard:     {label: 'Home',        Icon: Home},
   Attendance:    {label: 'Attendance',  Icon: Clock},
   Leave:         {label: 'Leave',       Icon: Umbrella},
-  Notifications: {label: 'Alerts',      Icon: Bell},
+  Employees:     {label: 'Employees',   Icon: Users},
+  Announcements: {label: 'Updates',     Icon: Megaphone},
 };
 const MAX_TABS = Object.keys(TAB_META).length;
 
@@ -101,7 +102,6 @@ export default function CustomTabBar({state, navigation, unreadCount = 0}) {
         {tabs.map((tab, index) => {
           const focused   = state.index === index;
           const iconColor = focused ? colors.primary : colors.textTertiary;
-          const showBadge = tab.name === 'Notifications' && unreadCount > 0;
 
           return (
             <TouchableOpacity
@@ -116,9 +116,6 @@ export default function CustomTabBar({state, navigation, unreadCount = 0}) {
                     color={iconColor}
                     strokeWidth={focused ? 2.3 : 1.7}
                   />
-                  {showBadge && (
-                    <View style={[styles.badge, {borderColor: colors.surface}]} />
-                  )}
                 </View>
                 <Animated.Text
                   style={[styles.label, {opacity: lblOps[index], color: colors.primary}]}

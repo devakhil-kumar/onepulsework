@@ -368,6 +368,7 @@ export default function PayrollDetailScreen() {
     <View style={[styles.root, {backgroundColor: colors.background}]}>
       <AppHeader
         title={title}
+        showBack
         rightAction={period && (
           <Badge
             status={STATUS_MAP[period.status]}

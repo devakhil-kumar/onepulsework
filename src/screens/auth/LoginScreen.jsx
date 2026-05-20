@@ -4,6 +4,7 @@ import {
   TouchableOpacity, KeyboardAvoidingView,
   ScrollView, Platform, ActivityIndicator,
 } from 'react-native';
+import {Eye, EyeOff} from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AppText} from '@components/ui';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
@@ -61,25 +62,43 @@ const LIGHT = {
 
 // ── Custom input with focus ring ───────────────────────────────────────────
 
-function Field({label, error, C, ...rest}) {
+function Field({label, error, C, secureTextEntry, ...rest}) {
   const [focused, setFocused] = useState(false);
+  const [shown, setShown] = useState(false);
+  const isPassword = secureTextEntry === true;
   return (
     <View style={styles.fieldWrap}>
       <AppText style={[styles.label, {color: C.muted}]}>{label}</AppText>
-      <TextInput
-        style={[
-          styles.input,
-          {
-            backgroundColor: C.inputBg,
-            borderColor: error ? C.error : focused ? C.inputFocus : C.inputBorder,
-            color: C.text,
-          },
-        ]}
-        placeholderTextColor={C.faint}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        {...rest}
-      />
+      <View style={styles.inputWrap}>
+        <TextInput
+          style={[
+            styles.input,
+            {
+              backgroundColor: C.inputBg,
+              borderColor: error ? C.error : focused ? C.inputFocus : C.inputBorder,
+              color: C.text,
+              paddingRight: isPassword ? 48 : spacing[4],
+            },
+          ]}
+          placeholderTextColor={C.faint}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          secureTextEntry={isPassword && !shown}
+          {...rest}
+        />
+        {isPassword && (
+          <TouchableOpacity
+            onPress={() => setShown(v => !v)}
+            style={styles.eyeBtn}
+            activeOpacity={0.6}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            {shown
+              ? <EyeOff size={18} color={C.muted} strokeWidth={1.8} />
+              : <Eye    size={18} color={C.muted} strokeWidth={1.8} />
+            }
+          </TouchableOpacity>
+        )}
+      </View>
       {error ? (
         <AppText style={[styles.errorText, {color: C.error}]}>{error}</AppText>
       ) : null}
@@ -89,7 +108,7 @@ function Field({label, error, C, ...rest}) {
 
 // ── Main screen ────────────────────────────────────────────────────────────
 
-export default function LoginScreen() {
+export default function LoginScreen({navigation, route}) {
   const isDark   = useIsDark();
   const C        = isDark ? DARK : LIGHT;
   const insets   = useSafeAreaInsets();
@@ -100,6 +119,8 @@ export default function LoginScreen() {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [errors,   setErrors]   = useState({});
+
+  const resetSuccess = route?.params?.resetSuccess ?? false;
 
   function validate() {
     const e = {};
@@ -191,7 +212,12 @@ export default function LoginScreen() {
               Enter your credentials below
             </AppText>
 
-            {authError ? (
+            {resetSuccess ? (
+              <View style={[styles.errorBanner, {backgroundColor: 'rgba(52,211,153,0.12)', borderColor: 'rgba(52,211,153,0.3)'}]}>
+                <View style={[styles.errorDot, {backgroundColor: '#34D399'}]} />
+                <AppText style={[styles.errorMsg, {color: isDark ? '#34D399' : '#059669'}]}>Password reset! Sign in with your new password.</AppText>
+              </View>
+            ) : authError ? (
               <View style={[styles.errorBanner, {backgroundColor: C.errorBg, borderColor: C.error + '40'}]}>
                 <View style={[styles.errorDot, {backgroundColor: C.error}]} />
                 <AppText style={[styles.errorMsg, {color: C.error}]}>{authError}</AppText>
@@ -220,6 +246,13 @@ export default function LoginScreen() {
               error={errors.password}
               secureTextEntry
             />
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ForgotPassword')}
+              activeOpacity={0.7}
+              style={styles.forgotBtn}>
+              <AppText style={[styles.forgotLabel, {color: C.primary}]}>Forgot password?</AppText>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.signInBtn, loading && {opacity: 0.7}]}
@@ -368,6 +401,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing[2],
     textTransform: 'uppercase',
   },
+  inputWrap: {position: 'relative'},
   input: {
     borderWidth: 1.5,
     borderRadius: 14,
@@ -375,10 +409,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[3],
     fontSize: fontSize.base,
   },
+  eyeBtn: {
+    position: 'absolute', right: 14, top: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center',
+  },
   errorText: {
     fontSize: fontSize.xs,
     marginTop: spacing[1],
   },
+
+  // ── Forgot password ──
+  forgotBtn: {alignSelf: 'flex-end', marginTop: -spacing[2], marginBottom: spacing[3]},
+  forgotLabel: {fontSize: fontSize.sm, fontWeight: fontWeight.medium},
 
   // ── Sign In button ──
   signInBtn: {

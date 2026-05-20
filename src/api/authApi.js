@@ -16,4 +16,10 @@ export const authApi = {
 
   updateMe: patch =>
     client.patch(API.AUTH.ME, patch).then(r => r.data.data),
+
+  forgotPassword: email =>
+    client.post(API.AUTH.FORGOT_PASSWORD, {email}).then(r => r.data),
+
+  resetPassword: (email, otp, newPassword) =>
+    client.post(API.AUTH.RESET_PASSWORD, {email, otp, newPassword}).then(r => r.data),
 };

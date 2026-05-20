@@ -5,10 +5,10 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
-import {ArrowLeft, Building2, Clock, DollarSign} from 'lucide-react-native';
+import {ArrowLeft, Building2, Clock, DollarSign, TrendingUp, CalendarDays, PiggyBank, RefreshCw, Receipt} from 'lucide-react-native';
 import {colors, spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
-import {AppText, Button, Spinner} from '@components/ui';
+import {AppText, Button, Spinner, Dropdown} from '@components/ui';
 import {AppHeader} from '@components/common';
 import {
   useGetOrgInfoQuery,
@@ -97,7 +97,7 @@ function SectionCard({title, children}) {
   const colors = useColors();
   return (
     <View style={[styles.sectionCard, {backgroundColor: colors.surface, borderColor: colors.border}]}>
-      {title && <AppText style={[styles.sectionTitle, {color: colors.text}]}>{title}</AppText>}
+      {title ? <AppText style={[styles.sectionTitle, {color: colors.text}]}>{title}</AppText> : null}
       {children}
     </View>
   );
@@ -261,31 +261,27 @@ function OrgTab({org, saving, onSave}) {
           <StyledInput label="CONTACT EMAIL" value={form.contactEmail} onChangeText={set('contactEmail')} keyboardType="email-address" autoCapitalize="none" />
           <StyledInput label="CONTACT PHONE" value={form.contactPhone} onChangeText={set('contactPhone')} keyboardType="phone-pad" />
         </Row>
-        <FieldLabel label="INDUSTRY" />
-        <ChipPicker options={INDUSTRIES} value={form.industry} onChange={set('industry')} />
+        <Dropdown
+          label="INDUSTRY"
+          value={form.industry}
+          onChange={set('industry')}
+          options={INDUSTRIES}
+          placeholder="Select industry…"
+          searchable
+        />
       </SectionCard>
 
       <SectionCard title="Address">
         <StyledInput label="ADDRESS LINE 1" value={form.addressLine1} onChangeText={set('addressLine1')} autoCapitalize="words" />
         <StyledInput label="ADDRESS LINE 2" value={form.addressLine2} onChangeText={set('addressLine2')} placeholder="Apartment, unit…" autoCapitalize="words" />
         <StyledInput label="SUBURB / CITY" value={form.suburb} onChangeText={set('suburb')} autoCapitalize="words" />
-        <FieldLabel label="STATE" />
-        <View style={styles.stateRow}>
-          {AU_STATES.map(s => {
-            const active = form.state === s;
-            return (
-              <TouchableOpacity
-                key={s}
-                onPress={() => set('state')(s)}
-                style={[styles.stateChip, {
-                  borderColor: active ? colors.primary : colors.border,
-                  backgroundColor: active ? colors.primaryLight : colors.surface,
-                }]}>
-                <AppText style={[styles.stateText, {color: active ? colors.primary : colors.textSecondary}]}>{s}</AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Dropdown
+          label="STATE"
+          value={form.state}
+          onChange={set('state')}
+          options={AU_STATES.map(s => ({value: s, label: s}))}
+          placeholder="Select state…"
+        />
         <View style={{width: 140}}>
           <StyledInput label="POSTCODE" value={form.postcode} onChangeText={set('postcode')} keyboardType="number-pad" maxLength={4} />
         </View>
@@ -329,25 +325,14 @@ function DisplayTab({org, saving, onSave}) {
         <AppText style={[styles.sectionDesc, {color: colors.textSecondary}]}>
           All clock-in/out times, shift schedules, and payroll dates are stored in UTC and displayed in this timezone.
         </AppText>
-        {TZ_OPTS.map(o => {
-          const active = timezone === o.value;
-          return (
-            <TouchableOpacity
-              key={o.value}
-              onPress={() => setTimezone(o.value)}
-              style={[styles.listOption, {
-                borderBottomColor: colors.border,
-                backgroundColor: active ? colors.primaryLight : 'transparent',
-              }]}>
-              <View style={[styles.radioCircle, {borderColor: active ? colors.primary : colors.border}]}>
-                {active && <View style={[styles.radioDot, {backgroundColor: colors.primary}]} />}
-              </View>
-              <AppText style={[styles.listOptionLabel, {color: active ? colors.primary : colors.text}]}>
-                {o.label}
-              </AppText>
-            </TouchableOpacity>
-          );
-        })}
+        <Dropdown
+          label="TIMEZONE"
+          value={timezone}
+          onChange={setTimezone}
+          options={TZ_OPTS}
+          placeholder="Select timezone…"
+          searchable
+        />
       </SectionCard>
 
       <SectionCard title="Time Format">
@@ -369,6 +354,91 @@ function DisplayTab({org, saving, onSave}) {
 }
 
 // ── Payroll Policy tab ───────────────────────────────────────────────────────
+
+function RateRow({label, value, onChangeText, min, unit = '×', isLast = false}) {
+  const colors = useColors();
+  return (
+    <View style={[styles.rateRow, !isLast && {borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border}]}>
+      <AppText style={[styles.rateLabel, {color: colors.text}]}>{label}</AppText>
+      <View style={styles.rateRight}>
+        {min && (
+          <AppText style={[styles.rateMin, {color: colors.textTertiary}]}>min {min}</AppText>
+        )}
+        <View style={[styles.rateInputWrap, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}>
+          <TextInput
+            style={[styles.rateInput, {color: colors.text}]}
+            value={String(value ?? '')}
+            onChangeText={onChangeText}
+            keyboardType="decimal-pad"
+            selectTextOnFocus
+          />
+          <AppText style={[styles.rateUnit, {color: colors.textSecondary}]}>{unit}</AppText>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TierCard({tier, color, hours, rate, onHours, onRate}) {
+  const colors = useColors();
+  return (
+    <View style={[styles.tierCard, {borderColor: color + '40', backgroundColor: color + '08'}]}>
+      <View style={styles.tierCardHeader}>
+        <View style={[styles.tierBadge, {backgroundColor: color + '18'}]}>
+          <AppText style={[styles.tierBadgeText, {color}]}>Tier {tier}</AppText>
+        </View>
+        <AppText style={[styles.rateMin, {color: colors.textTertiary}]}>
+          {tier === 1 ? 'min 1.5×' : 'min 2.0×'}
+        </AppText>
+      </View>
+      <View style={styles.tierFields}>
+        <View style={styles.tierField}>
+          <AppText style={[styles.rateMin, {color: colors.textSecondary, marginBottom: spacing[1]}]}>
+            AFTER (hrs/day)
+          </AppText>
+          <View style={[styles.tierInputWrap, {borderColor: colors.border, backgroundColor: colors.surface}]}>
+            <TextInput
+              style={[styles.tierInput, {color: colors.text}]}
+              value={String(hours ?? '')}
+              onChangeText={onHours}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
+            <AppText style={[styles.rateUnit, {color: colors.textSecondary}]}>h</AppText>
+          </View>
+        </View>
+        <AppText style={[styles.tierArrow, {color: colors.textTertiary}]}>→</AppText>
+        <View style={styles.tierField}>
+          <AppText style={[styles.rateMin, {color: colors.textSecondary, marginBottom: spacing[1]}]}>
+            RATE
+          </AppText>
+          <View style={[styles.tierInputWrap, {borderColor: colors.border, backgroundColor: colors.surface}]}>
+            <TextInput
+              style={[styles.tierInput, {color: colors.text}]}
+              value={String(rate ?? '')}
+              onChangeText={onRate}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
+            <AppText style={[styles.rateUnit, {color: colors.textSecondary}]}>×</AppText>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PolicySectionHeader({Icon, title, color}) {
+  const colors = useColors();
+  return (
+    <View style={styles.policySectionHeader}>
+      <View style={[styles.policyIconWrap, {backgroundColor: color + '18'}]}>
+        <Icon size={15} color={color} strokeWidth={2} />
+      </View>
+      <AppText style={[styles.sectionTitle, {color: colors.text, marginBottom: 0}]}>{title}</AppText>
+    </View>
+  );
+}
 
 function PayrollTab({policy, saving, onSave}) {
   const colors = useColors();
@@ -406,68 +476,95 @@ function PayrollTab({policy, saving, onSave}) {
     });
   }, [policy]);
 
-  const set = key => val => setForm(f => ({...f, [key]: val}));
+  const set    = key => val => setForm(f => ({...f, [key]: val}));
   const setNum = key => val => setForm(f => ({...f, [key]: parseFloat(val) || 0}));
-
-  function handleSave() {
-    onSave(form);
-  }
 
   return (
     <ScrollView contentContainerStyle={styles.tabScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* Info banner */}
       <View style={[styles.infoAlert, {backgroundColor: colors.infoLight, borderColor: colors.info + '40'}]}>
         <AppText style={[styles.infoAlertText, {color: colors.info}]}>
-          Empty fields use the platform default. Values cannot go below the Australian statutory minimum shown below each field.
+          Values apply to all employees. Cannot go below Australian statutory minimums.
         </AppText>
       </View>
 
-      <SectionCard title="Penalty Rates (× multiplier)">
-        <View style={styles.policyRow}>
-          <PolicyInput label="SATURDAY RATE"       value={form.saturdayRate}      onChangeText={setNum('saturdayRate')}      helper="Min: 1.25×" />
-          <View style={{width: spacing[3]}} />
-          <PolicyInput label="SUNDAY RATE"         value={form.sundayRate}        onChangeText={setNum('sundayRate')}        helper="Min: 1.5×" />
-          <View style={{width: spacing[3]}} />
-          <PolicyInput label="PUBLIC HOLIDAY RATE" value={form.publicHolidayRate} onChangeText={setNum('publicHolidayRate')} helper="Min: 2.0×" />
+      {/* Penalty Rates */}
+      <SectionCard>
+        <PolicySectionHeader Icon={TrendingUp} title="Penalty Rates" color="#F59E0B" />
+        <View style={[styles.rateTable, {borderColor: colors.border}]}>
+          <RateRow label="Saturday"      value={form.saturdayRate}      onChangeText={setNum('saturdayRate')}      min="1.25×" />
+          <RateRow label="Sunday"        value={form.sundayRate}        onChangeText={setNum('sundayRate')}        min="1.5×" />
+          <RateRow label="Public Holiday" value={form.publicHolidayRate} onChangeText={setNum('publicHolidayRate')} min="2.0×" isLast />
         </View>
       </SectionCard>
 
-      <SectionCard title="Overtime">
-        <View style={styles.policyRow}>
-          <PolicyInput label="TIER 1 THRESHOLD (hrs/day)" value={form.overtimeTier1Hours} onChangeText={setNum('overtimeTier1Hours')} helper="Hours before OT kicks in" />
-          <View style={{width: spacing[3]}} />
-          <PolicyInput label="TIER 1 RATE (×)"            value={form.overtimeTier1Rate}  onChangeText={setNum('overtimeTier1Rate')}  helper="Min: 1.5×" />
-        </View>
-        <View style={styles.policyRow}>
-          <PolicyInput label="TIER 2 THRESHOLD (hrs/day)" value={form.overtimeTier2Hours} onChangeText={setNum('overtimeTier2Hours')} helper="Hours before Tier 2 OT" />
-          <View style={{width: spacing[3]}} />
-          <PolicyInput label="TIER 2 RATE (×)"            value={form.overtimeTier2Rate}  onChangeText={setNum('overtimeTier2Rate')}  helper="Min: 2.0×" />
-        </View>
-      </SectionCard>
-
-      <SectionCard title="Leave (hours/year)">
-        <View style={styles.policyRow}>
-          <PolicyInput label="ANNUAL LEAVE"          value={form.annualLeaveHoursPerYear} onChangeText={setNum('annualLeaveHoursPerYear')} helper="NES min: 152 h" />
-          <View style={{width: spacing[3]}} />
-          <PolicyInput label="SICK / PERSONAL LEAVE" value={form.sickLeaveHoursPerYear}   onChangeText={setNum('sickLeaveHoursPerYear')}   helper="NES min: 76 h" />
-        </View>
-      </SectionCard>
-
-      <SectionCard title="Superannuation">
-        <View style={{width: '50%'}}>
-          <PolicyInput label="SG RATE (e.g. 0.115 = 11.5%)" value={form.superRate} onChangeText={setNum('superRate')} helper="Min: 0.115 (11.5%)" />
+      {/* Overtime */}
+      <SectionCard>
+        <PolicySectionHeader Icon={Clock} title="Overtime Tiers" color="#8B5CF6" />
+        <AppText style={[styles.sectionDesc, {color: colors.textSecondary, marginTop: spacing[1]}]}>
+          Hours per day before each overtime tier kicks in.
+        </AppText>
+        <View style={styles.tierStack}>
+          <TierCard
+            tier={1} color="#8B5CF6"
+            hours={form.overtimeTier1Hours} rate={form.overtimeTier1Rate}
+            onHours={setNum('overtimeTier1Hours')} onRate={setNum('overtimeTier1Rate')}
+          />
+          <TierCard
+            tier={2} color="#EF4444"
+            hours={form.overtimeTier2Hours} rate={form.overtimeTier2Rate}
+            onHours={setNum('overtimeTier2Hours')} onRate={setNum('overtimeTier2Rate')}
+          />
         </View>
       </SectionCard>
 
-      <SectionCard title="Pay Cycle">
-        <AppText style={[styles.sectionDesc, {color: colors.textSecondary}]}>
-          Changing this only affects new periods — already-generated periods keep their original cycle.
+      {/* Leave */}
+      <SectionCard>
+        <PolicySectionHeader Icon={CalendarDays} title="Leave Entitlements" color="#10B981" />
+        <View style={[styles.rateTable, {borderColor: colors.border, marginTop: spacing[3]}]}>
+          <RateRow label="Annual Leave"       value={form.annualLeaveHoursPerYear} onChangeText={setNum('annualLeaveHoursPerYear')} min="152 h" unit="h" />
+          <RateRow label="Sick / Personal"    value={form.sickLeaveHoursPerYear}   onChangeText={setNum('sickLeaveHoursPerYear')}   min="76 h"  unit="h" isLast />
+        </View>
+      </SectionCard>
+
+      {/* Superannuation */}
+      <SectionCard>
+        <PolicySectionHeader Icon={PiggyBank} title="Superannuation" color="#0EA5E9" />
+        <View style={[styles.superRow, {marginTop: spacing[3]}]}>
+          <View style={[styles.superInputWrap, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}>
+            <TextInput
+              style={[styles.superInput, {color: colors.text}]}
+              value={String(form.superRate ?? '')}
+              onChangeText={setNum('superRate')}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
+            <View style={[styles.superPct, {backgroundColor: colors.primaryLight}]}>
+              <AppText style={[styles.superPctText, {color: colors.primary}]}>
+                {((parseFloat(form.superRate) || 0) * 100).toFixed(1)}%
+              </AppText>
+            </View>
+          </View>
+          <AppText style={[styles.superHelper, {color: colors.textTertiary}]}>
+            Statutory min: 0.115 (11.5%)
+          </AppText>
+        </View>
+      </SectionCard>
+
+      {/* Pay Cycle */}
+      <SectionCard>
+        <PolicySectionHeader Icon={RefreshCw} title="Pay Cycle" color="#6366F1" />
+        <AppText style={[styles.sectionDesc, {color: colors.textSecondary, marginTop: spacing[1]}]}>
+          Changing this only affects new periods.
         </AppText>
         <RadioGroup options={PAY_CYCLES} value={form.payrollCycleType} onChange={set('payrollCycleType')} />
       </SectionCard>
 
-      <SectionCard title="Tax Withholding (ATO PAYG)">
-        <AppText style={[styles.sectionDesc, {color: colors.textSecondary}]}>
-          Controls how PAYG tax is withheld from employee pay. Uses ATO FY 2024-25 withholding tables.
+      {/* Tax Withholding */}
+      <SectionCard>
+        <PolicySectionHeader Icon={Receipt} title="Tax Withholding (ATO PAYG)" color="#EF4444" />
+        <AppText style={[styles.sectionDesc, {color: colors.textSecondary, marginTop: spacing[1]}]}>
+          Uses ATO FY 2024-25 withholding tables.
         </AppText>
         <RadioGroup options={TAX_SCALES} value={form.taxScale} onChange={set('taxScale')} />
 
@@ -475,7 +572,7 @@ function PayrollTab({policy, saving, onSave}) {
           <View style={{flex: 1}}>
             <AppText style={[styles.toggleLabel, {color: colors.text}]}>Medicare Levy Exempt</AppText>
             <AppText style={[styles.toggleDesc, {color: colors.textSecondary}]}>
-              Enable if all employees are exempt (e.g. certain visa categories). Consult your accountant before enabling.
+              Enable for employees exempt from Medicare (e.g. certain visa holders).
             </AppText>
           </View>
           <Switch
@@ -489,8 +586,10 @@ function PayrollTab({policy, saving, onSave}) {
 
       <Button
         label={saving ? 'Saving…' : 'Save Policy'}
+        variant="primary"
+        fullWidth
         loading={saving}
-        onPress={handleSave}
+        onPress={() => onSave(form)}
         style={styles.saveBtn}
       />
     </ScrollView>
@@ -640,6 +739,64 @@ const styles = StyleSheet.create({
   listOptionLabel: {fontSize: fontSize.sm, flex: 1},
 
   policyRow: {flexDirection: 'row', marginBottom: spacing[2]},
+
+  policySectionHeader: {flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[3]},
+  policyIconWrap: {width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center'},
+
+  rateTable: {borderWidth: 1, borderRadius: radius.md, overflow: 'hidden'},
+  rateRow: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing[4], paddingVertical: spacing[3],
+  },
+  rateLabel: {fontSize: fontSize.sm, fontWeight: fontWeight.medium, flex: 1},
+  rateRight: {flexDirection: 'row', alignItems: 'center', gap: spacing[3]},
+  rateMin:   {fontSize: 10, fontWeight: fontWeight.semiBold, letterSpacing: 0.3, textTransform: 'uppercase'},
+  rateInputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: radius.md,
+    overflow: 'hidden', width: 86,
+  },
+  rateInput: {
+    flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semiBold,
+    paddingHorizontal: spacing[2], paddingVertical: spacing[2],
+    textAlign: 'center',
+  },
+  rateUnit: {
+    paddingHorizontal: spacing[2], paddingVertical: spacing[2],
+    fontSize: fontSize.xs, fontWeight: fontWeight.bold,
+  },
+
+  tierStack: {gap: spacing[3], marginTop: spacing[3]},
+  tierCard:  {borderWidth: 1.5, borderRadius: radius.lg, padding: spacing[4], gap: spacing[3]},
+  tierCardHeader: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'},
+  tierBadge: {alignSelf: 'flex-start', paddingHorizontal: spacing[3], paddingVertical: 3, borderRadius: 999},
+  tierBadgeText: {fontSize: 10, fontWeight: fontWeight.bold, letterSpacing: 0.5, textTransform: 'uppercase'},
+  tierFields:{flexDirection: 'row', alignItems: 'flex-end', gap: spacing[2]},
+  tierField: {flex: 1},
+  tierArrow: {fontSize: fontSize.md, fontWeight: fontWeight.bold, paddingBottom: spacing[2]},
+  tierInputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderRadius: radius.md, overflow: 'hidden',
+  },
+  tierInput: {
+    flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semiBold,
+    paddingHorizontal: spacing[2], paddingVertical: spacing[2],
+    textAlign: 'center', minWidth: 0,
+  },
+
+  superRow: {gap: spacing[2]},
+  superInputWrap: {
+    flexDirection: 'row', alignItems: 'stretch',
+    borderWidth: 1, borderRadius: radius.md, overflow: 'hidden',
+  },
+  superInput: {
+    flex: 1, fontSize: fontSize.md, fontWeight: fontWeight.bold,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[3],
+  },
+  superPct: {paddingHorizontal: spacing[3], alignItems: 'center', justifyContent: 'center'},
+  superPctText: {fontSize: fontSize.sm, fontWeight: fontWeight.bold},
+  superHelper: {fontSize: fontSize.xs},
 
   infoAlert:     {borderWidth: 1, borderRadius: radius.md, padding: spacing[4], marginBottom: spacing[4]},
   infoAlertText: {fontSize: fontSize.sm},

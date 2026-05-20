@@ -8,7 +8,7 @@ import {DrawerContext} from '@app/DrawerContext';
 import {CustomTabBar} from '@components/common';
 import {DrawerMenu} from '@components/common';
 import {useAppDispatch, useAppSelector} from '@app/hooks';
-import {setUser, selectHasPerm} from '@features/auth/authSlice';
+import {setUser, selectHasPerm, selectIsAdmin} from '@features/auth/authSlice';
 import {authApi} from '@api';
 import {setStackNav} from '@navigation/stackNav';
 
@@ -29,6 +29,7 @@ import EmployeeDetailScreen from '@screens/admin/EmployeeDetailScreen';
 import DocumentsScreen from '@screens/app/DocumentsScreen';
 import AttendanceHistoryScreen from '@screens/app/AttendanceHistoryScreen';
 import ProjectsScreen from '@screens/app/ProjectsScreen';
+import JobsScreen from '@screens/app/JobsScreen';
 import PayslipsScreen from '@screens/app/PayslipsScreen';
 import PayrollDetailScreen from '@screens/app/PayrollDetailScreen';
 
@@ -37,6 +38,7 @@ const Tab = createBottomTabNavigator();
 
 function TabNavigator() {
   const canLeave = useAppSelector(selectHasPerm('leave.view'));
+  const isAdmin  = useAppSelector(selectIsAdmin);
 
   return (
     <Tab.Navigator
@@ -51,10 +53,13 @@ function TabNavigator() {
           shadowOpacity: 0,
         },
       }}>
-      <Tab.Screen name="Dashboard"     component={DashboardScreen} />
-      <Tab.Screen name="Attendance"    component={AttendanceScreen} />
+      <Tab.Screen name="Dashboard"  component={DashboardScreen} />
+      <Tab.Screen name="Attendance" component={AttendanceScreen} />
       {canLeave && <Tab.Screen name="Leave" component={LeaveScreen} />}
-      <Tab.Screen name="Notifications" component={NotificationsScreen} />
+      {isAdmin
+        ? <Tab.Screen name="Employees"     component={EmployeesScreen} />
+        : <Tab.Screen name="Announcements" component={AnnouncementsScreen} />
+      }
     </Tab.Navigator>
   );
 }
@@ -104,6 +109,7 @@ export default function AppNavigator() {
           gestureEnabled: true,
         }}>
         <Stack.Screen name="Main"              component={MainShell} />
+        <Stack.Screen name="Notifications"     component={NotificationsScreen} />
         <Stack.Screen name="Roles"             component={RolesScreen} />
         <Stack.Screen name="Departments"       component={DepartmentsScreen} />
         <Stack.Screen name="OrgSettings"       component={OrgSettingsScreen} />
@@ -116,6 +122,7 @@ export default function AppNavigator() {
         <Stack.Screen name="Documents"         component={DocumentsScreen} />
         <Stack.Screen name="AttendanceHistory" component={AttendanceHistoryScreen} />
         <Stack.Screen name="Projects"          component={ProjectsScreen} />
+        <Stack.Screen name="Jobs"              component={JobsScreen} />
         <Stack.Screen name="Payroll"           component={PayslipsScreen} />
         <Stack.Screen name="PayrollDetail"     component={PayrollDetailScreen} />
         <Stack.Screen

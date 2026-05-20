@@ -1,7 +1,7 @@
 import React from 'react';
 import {View, TouchableOpacity, StyleSheet, StatusBar} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {Menu, Bell} from 'lucide-react-native';
+import {Menu, Bell, ArrowLeft} from 'lucide-react-native';
 import {spacing, fontSize, fontWeight} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import AppText from '@components/ui/AppText';
@@ -9,8 +9,9 @@ import Avatar from '@components/ui/Avatar';
 import {useDrawer} from '@app/DrawerContext';
 import {useAppSelector} from '@app/hooks';
 import {selectUser} from '@features/auth/authSlice';
+import {getStackNav} from '@navigation/stackNav';
 
-export default function AppHeader({title, showAvatar = false, unreadCount = 0, rightAction}) {
+export default function AppHeader({title, showAvatar = false, unreadCount = 0, rightAction, showBack = false}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const {toggle} = useDrawer();
@@ -34,10 +35,13 @@ export default function AppHeader({title, showAvatar = false, unreadCount = 0, r
         ]}>
         <View style={styles.inner}>
           <TouchableOpacity
-            onPress={toggle}
+            onPress={showBack ? () => getStackNav()?.goBack() : toggle}
             style={styles.iconBtn}
             hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
-            <Menu size={22} color={colors.text} strokeWidth={1.8} />
+            {showBack
+              ? <ArrowLeft size={22} color={colors.text} strokeWidth={1.8} />
+              : <Menu size={22} color={colors.text} strokeWidth={1.8} />
+            }
           </TouchableOpacity>
 
           <AppText style={[styles.title, {color: colors.text}]} numberOfLines={1}>
@@ -46,7 +50,10 @@ export default function AppHeader({title, showAvatar = false, unreadCount = 0, r
 
           <View style={styles.rightActions}>
             {rightAction}
-            <TouchableOpacity style={styles.iconBtn}>
+            <TouchableOpacity
+              style={styles.iconBtn}
+              onPress={() => getStackNav()?.navigate('Notifications', {fromHeader: true})}
+              hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
               <Bell size={20} color={colors.textSecondary} strokeWidth={1.8} />
               {unreadCount > 0 && (
                 <View
