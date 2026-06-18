@@ -12,6 +12,7 @@ import {useAppSelector} from '@app/hooks';
 import {selectIsAdmin, selectHasPerm} from '@features/auth/authSlice';
 import {AppText, Card, Spinner, EmptyState, Badge, Avatar} from '@components/ui';
 import {AppHeader} from '@components/common';
+import {formatDate} from '@utils/format';
 import {useGetPeriodQuery} from '@features/payroll/payrollApi';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -22,15 +23,12 @@ function fmtCurrency(val) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'});
+  return formatDate(iso);
 }
 
 function fmtDateRange(start, end) {
   if (!start) return '—';
-  const s = new Date(start).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'});
-  const e = end ? new Date(end).toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}) : '';
-  return e ? `${s} – ${e}` : s;
+  return end ? `${formatDate(start)} – ${formatDate(end)}` : formatDate(start);
 }
 
 function fmtHours(h) {
@@ -154,7 +152,7 @@ function BreakdownModal({payslip, onClose}) {
                 {breakdown.map((row, idx) => (
                   <View key={idx} style={[styles.tableRow, {borderBottomColor: colors.border}]}>
                     <AppText style={[styles.colDate, {color: colors.textSecondary}]}>
-                      {new Date(row.date).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'})}
+                      {formatDate(row.date)}
                     </AppText>
                     <AppText style={[styles.colType, {color: classColor(row.classification, colors), fontSize: fontSize.xs}]}>
                       {CLASS_LABEL[row.classification] ?? row.classification}
@@ -323,7 +321,7 @@ function MyPayslipDetail({payslip, colors}) {
               {breakdown.map((row, idx) => (
                 <View key={idx} style={[styles.tableRow, {borderBottomColor: colors.border}]}>
                   <AppText style={[styles.colDate, {color: colors.textSecondary}]}>
-                    {new Date(row.date).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'})}
+                    {formatDate(row.date)}
                   </AppText>
                   <AppText style={[styles.colType, {color: classColor(row.classification, colors), fontSize: fontSize.xs}]}>
                     {CLASS_LABEL[row.classification] ?? row.classification}

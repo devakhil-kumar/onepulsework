@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {
   View, FlatList, TouchableOpacity, StyleSheet,
   Alert, Modal, TextInput, ScrollView, RefreshControl,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
@@ -9,30 +10,16 @@ import {ArrowLeft, Plus, Edit2, Trash2, Megaphone, Pin} from 'lucide-react-nativ
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
-import {selectIsAdmin} from '@features/auth/authSlice';
+import {selectHasPerm} from '@features/auth/authSlice';
 import {AppText, Card, Button, Spinner, EmptyState} from '@components/ui';
 import {AppHeader} from '@components/common';
+import {formatDate, formatDateTime} from '@utils/format';
 import {
   useListAnnouncementsQuery,
   useCreateAnnouncementMutation,
   useUpdateAnnouncementMutation,
   useDeleteAnnouncementMutation,
 } from '@features/admin/adminApi';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function formatDate(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-AU', {day: 'numeric', month: 'long', year: 'numeric'});
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}) +
-    ', ' + d.toLocaleTimeString('en-AU', {hour: 'numeric', minute: '2-digit', hour12: true});
-}
 
 // ── Ann form modal ─────────────────────────────────────────────────────────
 
@@ -56,7 +43,9 @@ function AnnModal({initial, onClose, onSave, saving}) {
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View style={[styles.overlay, {backgroundColor: colors.overlay}]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.overlay, {backgroundColor: colors.overlay}]}>
         <View style={[styles.sheet, {backgroundColor: colors.surface}]}>
           <View style={styles.sheetHeader}>
             <AppText style={styles.sheetTitle}>
@@ -115,7 +104,7 @@ function AnnModal({initial, onClose, onSave, saving}) {
             />
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -174,7 +163,8 @@ export default function AnnouncementsScreen() {
   const colors    = useColors();
   const insets    = useSafeAreaInsets();
   const navigation = useNavigation();
-  const isAdmin   = useAppSelector(selectIsAdmin);
+  // OWNER/ADMIN (null permissions) and any role with announcements.manage can post.
+  const canManage = useAppSelector(selectHasPerm('announcements.manage'));
 
   const [modal, setModal] = useState(null); // {mode:'create'} | {mode:'edit', ann}
   const [refreshing, setRefreshing] = useState(false);
@@ -220,7 +210,7 @@ export default function AnnouncementsScreen() {
     <View style={[styles.root, {backgroundColor: colors.background}]}>
       <AppHeader
         title="Announcements"
-        rightAction={isAdmin && (
+        rightAction={canManage && (
           <TouchableOpacity
             onPress={() => setModal({mode: 'create'})}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
@@ -236,9 +226,9 @@ export default function AnnouncementsScreen() {
           <EmptyState
             icon={<Megaphone size={44} color={colors.primary} />}
             title="No announcements yet"
-            description={isAdmin ? 'Post an announcement to keep your team informed.' : 'No announcements from your organisation yet.'}
+            description={canManage ? 'Post an announcement to keep your team informed.' : 'No announcements from your organisation yet.'}
           />
-          {isAdmin && (
+          {canManage && (
             <Button
               label="Post Announcement"
               variant="primary"
@@ -258,7 +248,7 @@ export default function AnnouncementsScreen() {
           renderItem={({item}) => (
             <AnnCard
               ann={item}
-              canManage={isAdmin}
+              canManage={canManage}
               onEdit={() => setModal({mode: 'edit', ann: item})}
               onDelete={() => confirmDelete(item)}
             />

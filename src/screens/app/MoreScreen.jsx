@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, ScrollView, TouchableOpacity, StyleSheet} from 'react-native';
+import {View, TouchableOpacity, StyleSheet} from 'react-native';
 import {ScreenWrapper} from '@components/common';
 import {AppText, Avatar, Card, Divider} from '@components/ui';
 import {
@@ -8,27 +8,33 @@ import {
   ClipboardList,
   Megaphone,
   Calendar,
+  CalendarDays,
   Settings,
   LogOut,
   ChevronRight,
 } from 'lucide-react-native';
-import {colors, spacing, radius} from '@theme';
+import {spacing, radius} from '@theme';
+import {useColors} from '@app/ThemeContext';
 import {useAppDispatch, useAppSelector} from '@app/hooks';
 import {logout, selectUser} from '@features/auth/authSlice';
 import {authApi} from '@api';
+import {getStackNav} from '@navigation/stackNav';
 
 const menuItems = [
-  {icon: Bell, label: 'Notifications', screen: 'Notifications'},
-  {icon: Briefcase, label: 'Jobs', screen: 'Jobs'},
-  {icon: ClipboardList, label: 'Tasks', screen: 'Tasks'},
-  {icon: Megaphone, label: 'Announcements', screen: 'Announcements'},
-  {icon: Calendar, label: 'Events', screen: 'Events'},
-  {icon: Settings, label: 'Settings', screen: 'Settings'},
+  {icon: Bell,          label: 'Notifications',        screen: 'Notifications'},
+  {icon: Settings,      label: 'Notification Settings', screen: 'NotificationPreferences'},
+  {icon: Briefcase,     label: 'Jobs',                  screen: 'Jobs'},
+  {icon: ClipboardList, label: 'Tasks',                 screen: 'Tasks'},
+  {icon: Megaphone,     label: 'Announcements',         screen: 'Announcements'},
+  {icon: Calendar,      label: 'Events',                screen: 'Events'},
+  {icon: CalendarDays,  label: 'Public Holidays',       screen: 'Holidays'},
+  {icon: Settings,      label: 'Settings',              screen: 'Settings'},
 ];
 
 export default function MoreScreen() {
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
+  const colors = useColors();
 
   async function handleLogout() {
     try {
@@ -40,7 +46,7 @@ export default function MoreScreen() {
   return (
     <ScreenWrapper bg={colors.background} scrollable>
       {/* Profile section */}
-      <View style={styles.header}>
+      <View style={[styles.header, {backgroundColor: colors.surface, borderBottomColor: colors.border}]}>
         <AppText variant="h3">More</AppText>
       </View>
 
@@ -63,8 +69,11 @@ export default function MoreScreen() {
             const Icon = item.icon;
             return (
               <React.Fragment key={item.label}>
-                <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-                  <View style={styles.menuIconWrap}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  activeOpacity={0.7}
+                  onPress={() => item.screen && getStackNav()?.navigate(item.screen)}>
+                  <View style={[styles.menuIconWrap, {backgroundColor: colors.primaryLight}]}>
                     <Icon size={18} color={colors.primary} />
                   </View>
                   <AppText variant="bodyMedium" style={styles.menuLabel}>
@@ -80,7 +89,7 @@ export default function MoreScreen() {
           })}
         </Card>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+        <TouchableOpacity style={[styles.logoutBtn, {backgroundColor: colors.errorLight}]} onPress={handleLogout} activeOpacity={0.7}>
           <LogOut size={18} color={colors.error} />
           <AppText variant="bodyMedium" color={colors.error} style={styles.logoutText}>
             Sign Out
@@ -96,9 +105,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing[5],
     paddingTop: spacing[5],
     paddingBottom: spacing[4],
-    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   profileSection: {
     flexDirection: 'row',
@@ -125,7 +132,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.sm,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing[3],
@@ -141,7 +147,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: spacing[4],
     padding: spacing[4],
-    backgroundColor: colors.errorLight,
     borderRadius: radius.md,
     gap: spacing[2],
   },

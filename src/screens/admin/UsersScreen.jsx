@@ -5,15 +5,19 @@ import {
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
-import {ArrowLeft, UserPlus, Edit2, Search, Users, X} from 'lucide-react-native';
+import {ArrowLeft, UserPlus, Edit2, Search, Users, X, MoreVertical, LogOut, KeyRound} from 'lucide-react-native';
 import {colors, spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
+import {useAppSelector} from '@app/hooks';
+import {selectUser} from '@features/auth/authSlice';
 import {AppText, Card, Button, Spinner, Avatar, Badge, EmptyState} from '@components/ui';
 import {AppHeader} from '@components/common';
 import {
   useListUsersQuery,
   useInviteUserMutation,
   useUpdateUserMutation,
+  useForceLogoutUserMutation,
+  useResetUserPasswordMutation,
 } from '@features/admin/adminApi';
 import {formatDate} from '@utils/format';
 
@@ -181,7 +185,7 @@ function EditUserModal({user, onClose, onSave, saving}) {
 
 // ── User card ─────────────────────────────────────────────────────────────────
 
-function UserCard({user, onEdit}) {
+function UserCard({user, onMenu}) {
   const colors   = useColors();
   const sc       = STATUS_COLORS[user.status] ?? STATUS_COLORS.ACTIVE;
   const roleLabel = ROLE_LABELS[user.role] ?? user.role;
@@ -211,10 +215,72 @@ function UserCard({user, onEdit}) {
           )}
         </View>
       </View>
-      <TouchableOpacity onPress={onEdit} style={[styles.editBtn, {backgroundColor: colors.surfaceAlt}]}>
-        <Edit2 size={15} color={colors.primary} />
-      </TouchableOpacity>
+      {onMenu && (
+        <TouchableOpacity onPress={() => onMenu(user)} style={[styles.editBtn, {backgroundColor: colors.surfaceAlt}]}>
+          <MoreVertical size={17} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
     </Card>
+  );
+}
+
+// ── Per-user actions bottom sheet ───────────────────────────────────────────────
+
+function SheetItem({icon: Icon, label, danger, onPress}) {
+  const colors = useColors();
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.sheetItem, {borderBottomColor: colors.border}]} activeOpacity={0.7}>
+      <View style={[styles.sheetIconWrap, {backgroundColor: danger ? 'rgba(239,68,68,0.12)' : colors.primaryLight}]}>
+        <Icon size={19} color={danger ? '#EF4444' : colors.primary} />
+      </View>
+      <AppText style={[styles.sheetItemLabel, {color: danger ? '#EF4444' : colors.text}]}>{label}</AppText>
+    </TouchableOpacity>
+  );
+}
+
+function ActionsSheet({user, onClose, onEdit, onForceLogout, onResetPassword}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const canSession = user.role !== 'OWNER';
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.sheetOverlay}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <View style={[styles.sheet, {backgroundColor: colors.surface, paddingBottom: insets.bottom + spacing[4]}]}>
+          <View style={[styles.sheetHandle, {backgroundColor: colors.border}]} />
+          <AppText style={[styles.sheetTitle, {color: colors.text}]} numberOfLines={1}>{user.fullName}</AppText>
+          <SheetItem icon={Edit2} label="Edit role / status" onPress={onEdit} />
+          {canSession && <SheetItem icon={LogOut} label="Force sign-out" danger onPress={onForceLogout} />}
+          {canSession && <SheetItem icon={KeyRound} label="Reset password" danger onPress={onResetPassword} />}
+          <TouchableOpacity onPress={onClose} style={[styles.sheetCancel, {backgroundColor: colors.surfaceAlt}]} activeOpacity={0.7}>
+            <AppText style={[styles.sheetCancelText, {color: colors.textSecondary}]}>Cancel</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Temporary password reveal ───────────────────────────────────────────────────
+
+function TempPasswordModal({data, onClose}) {
+  const colors = useColors();
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.centerOverlay}>
+        <View style={[styles.passCard, {backgroundColor: colors.surface}]}>
+          <AppText style={[styles.passTitle, {color: colors.text}]}>Temporary password</AppText>
+          <AppText style={[styles.passSub, {color: colors.textSecondary}]}>
+            Share this with {data.user.fullName} securely — it won't be shown again.
+          </AppText>
+          <View style={[styles.passBox, {backgroundColor: colors.surfaceAlt, borderColor: colors.border}]}>
+            <AppText selectable style={[styles.passValue, {color: colors.text}]}>{data.password}</AppText>
+          </View>
+          <Button label="Done" onPress={onClose} style={{marginTop: spacing[4]}} />
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -224,13 +290,18 @@ export default function UsersScreen() {
   const colors     = useColors();
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation();
+  const me         = useAppSelector(selectUser);
   const [search,     setSearch]     = useState('');
   const [showInvite, setShowInvite] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+  const [menuTarget, setMenuTarget] = useState(null);
+  const [tempPassword, setTempPassword] = useState(null); // {user, password}
 
   const {data, isLoading} = useListUsersQuery({});
   const [inviteUser, {isLoading: inviting}] = useInviteUserMutation();
   const [updateUser, {isLoading: updating}] = useUpdateUserMutation();
+  const [forceLogout] = useForceLogoutUserMutation();
+  const [resetPassword] = useResetUserPasswordMutation();
 
   const users = data?.items ?? data ?? [];
 
@@ -249,6 +320,20 @@ export default function UsersScreen() {
       setShowInvite(false);
       Alert.alert('Sent', `Invitation sent to ${body.email}.`);
     } catch (err) {
+      // Inviting an EMPLOYEE provisions a staff seat — respect the plan cap.
+      if (err?.code === 'SEAT_LIMIT_REACHED') {
+        setShowInvite(false);
+        const {limit, current} = err.details ?? {};
+        setTimeout(() => {
+          Alert.alert(
+            'Employee limit reached',
+            `Your current plan allows up to ${limit ?? 'your plan’s limit of'} employee${limit === 1 ? '' : 's'}` +
+            `${current != null ? ` (you have ${current})` : ''}. ` +
+            'Upgrade your plan or add seats from the web dashboard to invite more staff.',
+          );
+        }, 300);
+        return;
+      }
       Alert.alert('Error', err.data ?? 'Could not send invitation.');
     }
   }
@@ -261,6 +346,54 @@ export default function UsersScreen() {
     } catch (err) {
       Alert.alert('Error', err.data ?? 'Could not update user.');
     }
+  }
+
+  function handleForceLogout(user) {
+    setMenuTarget(null);
+    setTimeout(() => {
+      Alert.alert(
+        'Force sign-out?',
+        `Revoke all active sessions for ${user.fullName}? They'll need to sign in again.`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Force sign-out', style: 'destructive',
+            onPress: async () => {
+              try {
+                await forceLogout(user.id).unwrap();
+                Alert.alert('Done', `${user.fullName} signed out everywhere.`);
+              } catch (err) {
+                Alert.alert('Error', err.data ?? 'Could not sign out user.');
+              }
+            },
+          },
+        ],
+      );
+    }, 300);
+  }
+
+  function handleResetPassword(user) {
+    setMenuTarget(null);
+    setTimeout(() => {
+      Alert.alert(
+        'Reset password?',
+        `Generate a temporary password for ${user.fullName} and revoke their sessions?`,
+        [
+          {text: 'Cancel', style: 'cancel'},
+          {
+            text: 'Reset', style: 'destructive',
+            onPress: async () => {
+              try {
+                const res = await resetPassword(user.id).unwrap();
+                setTempPassword({user, password: res.tempPassword});
+              } catch (err) {
+                Alert.alert('Error', err.data ?? 'Could not reset password.');
+              }
+            },
+          },
+        ],
+      );
+    }, 300);
   }
 
   const total = users.length;
@@ -319,7 +452,7 @@ export default function UsersScreen() {
           contentContainerStyle={[styles.list, {paddingBottom: insets.bottom + spacing[6]}]}
           showsVerticalScrollIndicator={false}
           renderItem={({item}) => (
-            <UserCard user={item} onEdit={() => setEditTarget(item)} />
+            <UserCard user={item} onMenu={item.id === me?.id ? null : setMenuTarget} />
           )}
           ItemSeparatorComponent={() => <View style={{height: spacing[3]}} />}
         />
@@ -341,6 +474,20 @@ export default function UsersScreen() {
           saving={updating}
         />
       )}
+
+      {menuTarget && (
+        <ActionsSheet
+          user={menuTarget}
+          onClose={() => setMenuTarget(null)}
+          onEdit={() => { const u = menuTarget; setMenuTarget(null); setTimeout(() => setEditTarget(u), 250); }}
+          onForceLogout={() => handleForceLogout(menuTarget)}
+          onResetPassword={() => handleResetPassword(menuTarget)}
+        />
+      )}
+
+      {tempPassword && (
+        <TempPasswordModal data={tempPassword} onClose={() => setTempPassword(null)} />
+      )}
     </View>
   );
 }
@@ -350,6 +497,25 @@ export default function UsersScreen() {
 const styles = StyleSheet.create({
   root:   {flex: 1},
   center: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+
+  // Actions bottom sheet
+  sheetOverlay: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'},
+  sheet: {borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: spacing[3], paddingHorizontal: spacing[5]},
+  sheetHandle: {width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: spacing[3]},
+  sheetTitle: {fontSize: fontSize.base, fontWeight: fontWeight.bold, textAlign: 'center', marginBottom: spacing[3]},
+  sheetItem: {flexDirection: 'row', alignItems: 'center', gap: spacing[4], paddingVertical: spacing[4], borderBottomWidth: 1},
+  sheetIconWrap: {width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center'},
+  sheetItemLabel: {fontSize: fontSize.base, fontWeight: fontWeight.semiBold},
+  sheetCancel: {borderRadius: radius.md, paddingVertical: spacing[4], alignItems: 'center', marginTop: spacing[4]},
+  sheetCancelText: {fontSize: fontSize.base, fontWeight: fontWeight.semiBold},
+
+  // Temp password modal
+  centerOverlay: {flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', padding: spacing[5]},
+  passCard: {width: '100%', maxWidth: 380, borderRadius: radius.lg, padding: spacing[5]},
+  passTitle: {fontSize: fontSize.base, fontWeight: fontWeight.bold, marginBottom: spacing[2]},
+  passSub: {fontSize: fontSize.sm, marginBottom: spacing[4]},
+  passBox: {borderWidth: 1, borderRadius: radius.md, paddingVertical: spacing[4], paddingHorizontal: spacing[4], alignItems: 'center'},
+  passValue: {fontSize: fontSize.lg, fontWeight: fontWeight.bold, letterSpacing: 1},
 
   header: {
     flexDirection: 'row', alignItems: 'center',

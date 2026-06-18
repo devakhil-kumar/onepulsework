@@ -11,6 +11,11 @@ export const projectApi = apiSlice.injectEndpoints({
         return [...items.map(p => ({type: 'Project', id: p.id})), {type: 'Project', id: 'LIST'}];
       },
     }),
+    // Minimal id+name list for task dropdowns — no projects.view permission needed.
+    listProjectOptions: build.query({
+      query: () => ({url: API.PROJECT.OPTIONS}),
+      providesTags: [{type: 'Project', id: 'OPTIONS'}],
+    }),
     createProject: build.mutation({
       query: body => ({url: API.PROJECT.LIST, method: 'POST', data: body}),
       invalidatesTags: [{type: 'Project', id: 'LIST'}],
@@ -28,6 +33,7 @@ export const projectApi = apiSlice.injectEndpoints({
 
 export const {
   useListProjectsQuery,
+  useListProjectOptionsQuery,
   useCreateProjectMutation,
   useUpdateProjectMutation,
   useDeleteProjectMutation,

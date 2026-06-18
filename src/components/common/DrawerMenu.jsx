@@ -13,7 +13,7 @@ import {
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {getStackNav} from '@navigation/stackNav';
 import {
-  Home, Clock, Umbrella, Bell, Users, CalendarDays,
+  Home, Clock, Umbrella, Bell, Users, CalendarDays, CalendarCheck,
   Banknote, FolderOpen, Briefcase, Megaphone, Calendar,
   FileText, UserCog, Shield, Building2, Settings, LogOut, ChevronRight,
   ClipboardList,
@@ -24,6 +24,7 @@ import Avatar from '@components/ui/Avatar';
 import {useAppDispatch, useAppSelector} from '@app/hooks';
 import {logout, selectUser, selectIsAdmin, selectCanManage, selectHasPerm} from '@features/auth/authSlice';
 import {authApi} from '@api';
+import logo4 from '@assets/OnePulseWork_logo_10.png';
 
 const DRAWER_WIDTH = Math.min(Dimensions.get('window').width * 0.82, 300);
 
@@ -88,8 +89,10 @@ function useNavSections() {
     {
       label: 'Other',
       items: [
-        canDocuments && {key: 'Documents',     label: 'Documents',     Icon: FileText},
-        {key: 'Notifications', label: 'Notifications', Icon: Bell},
+        canDocuments && {key: 'Documents',             label: 'Documents',          Icon: FileText},
+        {key: 'Holidays',              label: 'Public Holidays',    Icon: CalendarCheck},
+        {key: 'Notifications',         label: 'Notifications',      Icon: Bell},
+        {key: 'NotificationPreferences', label: 'Notif. Settings',  Icon: Settings},
       ].filter(Boolean),
     },
     isAdmin && {
@@ -108,7 +111,7 @@ function useNavSections() {
   return sections;
 }
 
-const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Jobs', 'Payroll', 'PayrollDetail', 'Profile', 'Notifications'];
+const STACK_SCREENS = ['Roles', 'Departments', 'OrgSettings', 'Users', 'Announcements', 'Events', 'Holidays', 'Tasks', 'Employees', 'EmployeeDetail', 'Documents', 'AttendanceHistory', 'Projects', 'Jobs', 'Payroll', 'PayrollDetail', 'Profile', 'Notifications', 'NotificationPreferences', 'Shifts'];
 
 export default function DrawerMenu({visible, onClose}) {
   const insets = useSafeAreaInsets();
@@ -223,16 +226,10 @@ export default function DrawerMenu({visible, onClose}) {
               transform: [{translateX: slideX}],
             },
           ]}>
-          {/* Header — gradient-style with brand */}
+          {/* Header — brand */}
           <View style={styles.header}>
-            <View style={styles.logoMark}>
-              <AppText style={styles.logoText}>CP</AppText>
-            </View>
-            <View style={styles.headerText}>
-              {/* <AppText style={styles.brandName}>OnePulseWork</AppText> */}
-              <AppText style={styles.brandName}>CyberPulse</AppText>
-              <AppText style={styles.brandSub}>Workforce Platform</AppText>
-            </View>
+            <Image source={logo4} style={styles.logoImg} resizeMode="contain" />
+            {/* <AppText style={styles.brandSub}>Workforce Platform</AppText> */}
           </View>
 
           {/* Nav sections */}
@@ -283,7 +280,7 @@ export default function DrawerMenu({visible, onClose}) {
               }}
               style={styles.footerUser}
               activeOpacity={0.7}>
-              <Avatar name={user?.fullName} size="sm" />
+              <Avatar name={user?.fullName} uri={user?.avatarUrl ?? undefined} size="sm" />
               <View style={styles.userInfo}>
                 <AppText style={styles.userName} numberOfLines={1}>
                   {user?.fullName}
@@ -325,27 +322,17 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing[5],
     paddingVertical: spacing[5],
     borderBottomWidth: 1,
     borderBottomColor: colors.sidebarBorder,
-    gap: spacing[3],
+    gap: spacing[1],
   },
-  logoMark: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  logoText: {
-    color: colors.white,
-    fontWeight: fontWeight.bold,
-    fontSize: fontSize.sm,
+  logoImg: {
+    width: 260,
+    height: 54,
   },
   headerText: {gap: 2},
   brandName: {

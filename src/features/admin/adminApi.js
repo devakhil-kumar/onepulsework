@@ -94,6 +94,22 @@ export const adminApi = apiSlice.injectEndpoints({
       query: body => ({url: API.ORGANISATION.POLICY, method: 'PATCH', data: body}),
       invalidatesTags: ['PayrollPolicy'],
     }),
+    uploadOrgLogo: build.mutation({
+      queryFn: async (file, _api, _extra, _baseQuery) => {
+        try {
+          const {default: client} = await import('@api/client');
+          const fd = new FormData();
+          fd.append('logo', file);
+          const res = await client.post(API.ORGANISATION.LOGO, fd, {
+            headers: {'Content-Type': 'multipart/form-data'},
+          });
+          return {data: res.data.data ?? res.data};
+        } catch (err) {
+          return {error: {status: err.response?.status, data: err.response?.data?.message ?? err.message}};
+        }
+      },
+      invalidatesTags: ['OrgInfo'],
+    }),
 
     // ── Users ──────────────────────────────────────────────────────
     listUsers: build.query({
@@ -107,6 +123,13 @@ export const adminApi = apiSlice.injectEndpoints({
     updateUser: build.mutation({
       query: ({id, ...body}) => ({url: API.USER.DETAIL(id), method: 'PATCH', data: body}),
       invalidatesTags: ['Users'],
+    }),
+    forceLogoutUser: build.mutation({
+      query: id => ({url: API.USER.FORCE_LOGOUT(id), method: 'POST'}),
+      invalidatesTags: ['Users'],
+    }),
+    resetUserPassword: build.mutation({
+      query: id => ({url: API.USER.RESET_PASSWORD(id), method: 'POST'}),
     }),
   }),
 });
@@ -131,9 +154,12 @@ export const {
   useListShiftsQuery,
   useGetOrgInfoQuery,
   useUpdateOrgInfoMutation,
+  useUploadOrgLogoMutation,
   useGetPayrollPolicyQuery,
   useUpdatePayrollPolicyMutation,
   useListUsersQuery,
   useInviteUserMutation,
   useUpdateUserMutation,
+  useForceLogoutUserMutation,
+  useResetUserPasswordMutation,
 } = adminApi;

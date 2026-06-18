@@ -2,6 +2,7 @@ import React, {useState, useMemo} from 'react';
 import {
   View, FlatList, TouchableOpacity, StyleSheet, Alert,
   Modal, TextInput, ScrollView, RefreshControl, Linking,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
@@ -16,6 +17,7 @@ import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin, selectCanManage, selectEmployeeId} from '@features/auth/authSlice';
 import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
 import {AppHeader} from '@components/common';
+import {getDisplayTimezone} from '@utils/format';
 import {
   useListProjectsQuery, useCreateProjectMutation,
   useUpdateProjectMutation, useDeleteProjectMutation,
@@ -50,7 +52,7 @@ const STATUS_FILTER = [{code: '', name: 'All'}, ...STATUS_OPTS];
 
 function fmtDate(iso) {
   if (!iso) return null;
-  return dayjs(iso).format('D MMM YY');
+  return dayjs(iso).tz(getDisplayTimezone()).format('D MMM YY');
 }
 
 function toPayload({name, description, priority, status, clientName, clientEmail, clientPhone,
@@ -110,20 +112,22 @@ function InlineDropdown({label, value, options, onChange}) {
       </TouchableOpacity>
       {open && (
         <View style={[styles.dropdownList, {borderColor: colors.border, backgroundColor: colors.surface}]}>
-          {options.map(o => (
-            <TouchableOpacity
-              key={o.code}
-              onPress={() => { onChange(o.code); setOpen(false); }}
-              style={[styles.dropdownOption, {borderBottomColor: colors.border}]}>
-              <AppText style={{
-                fontSize: fontSize.sm,
-                color: o.code === value ? colors.primary : colors.text,
-                fontWeight: o.code === value ? fontWeight.semiBold : fontWeight.regular,
-              }}>
-                {o.name}
-              </AppText>
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={{maxHeight: 200}} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {options.map(o => (
+              <TouchableOpacity
+                key={o.code}
+                onPress={() => { onChange(o.code); setOpen(false); }}
+                style={[styles.dropdownOption, {borderBottomColor: colors.border}]}>
+                <AppText style={{
+                  fontSize: fontSize.sm,
+                  color: o.code === value ? colors.primary : colors.text,
+                  fontWeight: o.code === value ? fontWeight.semiBold : fontWeight.regular,
+                }}>
+                  {o.name}
+                </AppText>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -134,7 +138,10 @@ function InlineDropdown({label, value, options, onChange}) {
 
 function EmpMultiSelect({selectedIds, onChange, employees, label}) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [open, setOpen]     = useState(false);
   const [search, setSearch] = useState('');
+
   const filtered = useMemo(() => {
     if (!search.trim()) return employees;
     const q = search.toLowerCase();
@@ -146,55 +153,104 @@ function EmpMultiSelect({selectedIds, onChange, employees, label}) {
     else onChange([...selectedIds, id]);
   }
 
+  const selectedNames = employees
+    .filter(e => selectedIds.includes(e.id))
+    .map(e => ({id: e.id, name: `${e.firstName} ${e.lastName}`}));
+
   return (
-    <View>
+    <View style={styles.dropdownWrap}>
       {label && <FieldLabel>{label}</FieldLabel>}
-      <View style={[styles.empMulti, {borderColor: colors.border}]}>
-        <View style={[styles.empMultiSearch, {backgroundColor: colors.surfaceAlt, borderColor: colors.border}]}>
-          <Search size={13} color={colors.textTertiary} />
-          <TextInput
-            style={[styles.empMultiInput, {color: colors.text}]}
-            value={search} onChangeText={setSearch}
-            placeholder="Search employees…"
-            placeholderTextColor={colors.textTertiary}
-            autoCapitalize="none"
-          />
+
+      {/* Trigger — opens a dedicated picker modal (no nested-scroll issues) */}
+      <TouchableOpacity
+        style={[styles.dropdownBtn, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}
+        onPress={() => setOpen(true)}>
+        <AppText
+          style={[{fontSize: fontSize.sm, flex: 1}, {color: selectedIds.length ? colors.text : colors.textTertiary}]}>
+          {selectedIds.length ? `${selectedIds.length} member${selectedIds.length > 1 ? 's' : ''} selected` : 'Select team members…'}
+        </AppText>
+        <ChevronDown size={15} color={colors.textTertiary} />
+      </TouchableOpacity>
+
+      {/* Selected chips */}
+      {selectedNames.length > 0 && (
+        <View style={styles.chipRow}>
+          {selectedNames.map(m => (
+            <TouchableOpacity
+              key={m.id}
+              onPress={() => toggle(m.id)}
+              activeOpacity={0.7}
+              style={[styles.memberChip, {backgroundColor: colors.primaryLight, borderColor: colors.primary + '33'}]}>
+              <Avatar name={m.name} size="xs" />
+              <AppText style={{fontSize: fontSize.xs, fontWeight: fontWeight.medium, color: colors.primary, flexShrink: 1}} numberOfLines={1}>{m.name}</AppText>
+              <X size={11} color={colors.primary} />
+            </TouchableOpacity>
+          ))}
         </View>
-        <ScrollView style={styles.empMultiList} nestedScrollEnabled>
-          {filtered.map(e => {
-            const name = `${e.firstName} ${e.lastName}`;
-            const checked = selectedIds.includes(e.id);
-            return (
-              <TouchableOpacity
-                key={e.id}
-                onPress={() => toggle(e.id)}
-                style={[styles.empMultiRow, {borderBottomColor: colors.border},
-                  checked && {backgroundColor: colors.primaryLight}]}>
-                <View style={[styles.checkbox, {
-                  borderColor: checked ? colors.primary : colors.border,
-                  backgroundColor: checked ? colors.primary : 'transparent',
-                }]}>
-                  {checked && <AppText style={{color: '#fff', fontSize: 10}}>✓</AppText>}
-                </View>
-                <Avatar name={name} size="xs" />
-                <AppText style={{fontSize: fontSize.sm, color: colors.text, flex: 1}} numberOfLines={1}>{name}</AppText>
-              </TouchableOpacity>
-            );
-          })}
-          {filtered.length === 0 && (
-            <AppText style={[{textAlign: 'center', padding: spacing[3], fontSize: fontSize.xs, color: colors.textSecondary}]}>
-              No employees found
-            </AppText>
-          )}
-        </ScrollView>
-        {selectedIds.length > 0 && (
-          <View style={[styles.empMultiSummary, {borderTopColor: colors.border}]}>
-            <AppText style={{fontSize: fontSize.xs, fontWeight: fontWeight.semiBold, color: colors.textSecondary}}>
-              {selectedIds.length} selected
-            </AppText>
+      )}
+
+      {/* Picker modal */}
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[styles.overlay, {backgroundColor: colors.overlay}]}>
+          <View style={[styles.formSheet, {backgroundColor: colors.surface, paddingBottom: insets.bottom + spacing[3]}]}>
+            <View style={styles.formHeader}>
+              <AppText style={[styles.formTitle, {color: colors.text}]}>Team Members</AppText>
+              <TouchableOpacity onPress={() => setOpen(false)}><X size={20} color={colors.textSecondary} /></TouchableOpacity>
+            </View>
+
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderWidth: 1, borderRadius: radius.md, borderColor: colors.border, backgroundColor: colors.surfaceAlt, marginBottom: spacing[3]}}>
+              <Search size={14} color={colors.textTertiary} />
+              <TextInput
+                style={[styles.empMultiInput, {color: colors.text}]}
+                value={search} onChangeText={setSearch}
+                placeholder="Search employees…"
+                placeholderTextColor={colors.textTertiary}
+                autoCapitalize="none" autoCorrect={false}
+              />
+            </View>
+
+            <FlatList
+              data={filtered}
+              keyExtractor={e => e.id}
+              style={{maxHeight: 360}}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({item: e}) => {
+                const name = `${e.firstName} ${e.lastName}`;
+                const checked = selectedIds.includes(e.id);
+                return (
+                  <TouchableOpacity
+                    onPress={() => toggle(e.id)}
+                    style={[styles.empMultiRow, {borderBottomColor: colors.border}, checked && {backgroundColor: colors.primaryLight}]}>
+                    <View style={[styles.checkbox, {
+                      borderColor: checked ? colors.primary : colors.border,
+                      backgroundColor: checked ? colors.primary : 'transparent',
+                    }]}>
+                      {checked && <AppText style={{color: '#fff', fontSize: 10}}>✓</AppText>}
+                    </View>
+                    <Avatar name={name} size="xs" />
+                    <AppText style={{fontSize: fontSize.sm, color: colors.text, flex: 1}} numberOfLines={1}>{name}</AppText>
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                <AppText style={{textAlign: 'center', padding: spacing[4], fontSize: fontSize.sm, color: colors.textSecondary}}>
+                  No employees found
+                </AppText>
+              }
+            />
+
+            <Button
+              label={selectedIds.length ? `Done · ${selectedIds.length} selected` : 'Done'}
+              variant="primary"
+              fullWidth
+              onPress={() => setOpen(false)}
+              style={{marginTop: spacing[3]}}
+            />
           </View>
-        )}
-      </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -359,7 +415,7 @@ function ProjectDetailModal({project, onClose, canManage, onEdit}) {
             </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} style={{flex: 1}}>
+          <ScrollView showsVerticalScrollIndicator={false}>
             {rows.map(row => (
               <View key={row.label} style={[styles.detailRow, {borderBottomColor: colors.border}]}>
                 <AppText style={[styles.detailRowLabel, {color: colors.textSecondary}]}>{row.label}</AppText>
@@ -414,7 +470,9 @@ function ProjectFormModal({title, initial, onClose, onSave, saving, employees}) 
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View style={[styles.overlay, {backgroundColor: colors.overlay}]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.overlay, {backgroundColor: colors.overlay}]}>
         <View style={[styles.formSheet, {backgroundColor: colors.surface, paddingBottom: insets.bottom}]}>
           <View style={styles.formHeader}>
             <AppText style={[styles.formTitle, {color: colors.text}]}>{title}</AppText>
@@ -507,7 +565,7 @@ function ProjectFormModal({title, initial, onClose, onSave, saving, employees}) 
             />
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -529,12 +587,13 @@ export default function ProjectsScreen() {
   //   - OWNER/ADMIN (permissions=null) always see all
   //   - MANAGER system role sees all (mirrors web's canManageWorkforce gate)
   //   - explicit projects.viewAll or projects.manage permission
-  const canViewAll = canMgr || useAppSelector(s => {
+  const hasViewAllPerm = useAppSelector(s => {
     const perms = s.auth.user?.permissions;
     if (perms == null) return true;
     return Array.isArray(perms) &&
       (perms.includes('projects.viewAll') || perms.includes('projects.manage'));
   });
+  const canViewAll = canMgr || hasViewAllPerm;
 
   // Manage (create/edit/delete) requires explicit projects.manage OR OWNER/ADMIN.
   // MANAGER system role alone is NOT enough — they need the permission explicitly.
@@ -556,17 +615,17 @@ export default function ProjectsScreen() {
   const [updateProject, {isLoading: updating}] = useUpdateProjectMutation();
   const [deleteProject, {isLoading: deleting}] = useDeleteProjectMutation();
 
-  const allProjects = Array.isArray(data) ? data : (data?.items ?? []);
-  const employees   = Array.isArray(empData) ? empData : (empData?.items ?? []);
+  const employees = Array.isArray(empData) ? empData : (empData?.items ?? []);
 
   // Employees only see projects they manage or are a member of
   const projects = useMemo(() => {
+    const allProjects = Array.isArray(data) ? data : (data?.items ?? []);
     if (canViewAll) return allProjects;
     return allProjects.filter(p =>
       p.managerId === myEmployeeId ||
       (Array.isArray(p.memberIds) && p.memberIds.includes(myEmployeeId)),
     );
-  }, [allProjects, canViewAll, myEmployeeId]);
+  }, [data, canViewAll, myEmployeeId]);
 
   const total = projects.length;
 
@@ -794,6 +853,10 @@ const styles = StyleSheet.create({
   detailRow:    {flexDirection: 'row', alignItems: 'flex-start', paddingVertical: spacing[3], borderBottomWidth: 1, gap: spacing[3]},
   detailRowLabel:{fontSize: fontSize.xs, fontWeight: fontWeight.semiBold, textTransform: 'uppercase', letterSpacing: 0.4, width: 90, paddingTop: 2},
   detailRowValue:{fontSize: fontSize.sm},
+
+  // Team-member chips
+  chipRow:    {flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[2]},
+  memberChip: {flexDirection: 'row', alignItems: 'center', gap: spacing[1], maxWidth: '100%', paddingLeft: 4, paddingRight: spacing[2], paddingVertical: 4, borderRadius: radius.full, borderWidth: 1},
 
   // Form modal
   overlay:    {flex: 1, justifyContent: 'flex-end'},

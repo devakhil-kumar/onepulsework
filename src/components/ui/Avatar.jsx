@@ -2,6 +2,7 @@ import React from 'react';
 import {View, Image, StyleSheet} from 'react-native';
 import {colors, fontWeight} from '@theme';
 import AppText from './AppText';
+import {resolveMediaUrl} from '@utils/resolveMediaUrl';
 
 const sizes = {
   sm: 32,
@@ -38,7 +39,7 @@ export default function Avatar({name = '', uri, size = 'md', style}) {
   if (uri) {
     return (
       <Image
-        source={{uri}}
+        source={{uri: resolveMediaUrl(uri)}}
         style={[styles.base, {width: dim, height: dim, borderRadius: dim / 2}, style]}
       />
     );

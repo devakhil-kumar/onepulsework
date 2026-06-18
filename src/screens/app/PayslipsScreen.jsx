@@ -12,6 +12,7 @@ import {useAppSelector} from '@app/hooks';
 import {selectIsAdmin, selectHasPerm, selectRole} from '@features/auth/authSlice';
 import {AppText, Card, Button, Spinner, EmptyState, Badge} from '@components/ui';
 import {AppHeader} from '@components/common';
+import {formatDate} from '@utils/format';
 import {
   useListPeriodsQuery,
   useListAvailablePeriodsQuery,
@@ -29,15 +30,12 @@ function fmtCurrency(val) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'});
+  return formatDate(iso);
 }
 
 function fmtDateRange(start, end) {
   if (!start) return '—';
-  const s = new Date(start).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'});
-  const e = end ? new Date(end).toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'}) : '';
-  return e ? `${s} – ${e}` : s;
+  return end ? `${formatDate(start)} – ${formatDate(end)}` : formatDate(start);
 }
 
 const STATUS_LABEL = {DRAFT: 'Draft', FINALISED: 'Finalised', PAID: 'Paid', ISSUED: 'Issued'};

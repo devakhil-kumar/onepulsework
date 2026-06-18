@@ -14,6 +14,8 @@ if linkage != nil
   use_frameworks! :linkage => linkage.to_sym
 end
 
+use_modular_headers!
+
 target 'onepulsework' do
   config = use_native_modules!
 
@@ -22,6 +24,9 @@ target 'onepulsework' do
     # An absolute path to your application root.
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
+
+  # Firebase Cloud Messaging
+  pod 'Firebase/Messaging'
 
   post_install do |installer|
     react_native_post_install(

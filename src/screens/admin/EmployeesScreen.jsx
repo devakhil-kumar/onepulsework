@@ -1,15 +1,16 @@
 import React, {useState, useMemo} from 'react';
 import {
   View, FlatList, TouchableOpacity, StyleSheet,
-  Alert, Modal, TextInput, ScrollView, RefreshControl,
+  Alert, Modal, TextInput, ScrollView, RefreshControl, Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {ArrowLeft, Plus, Edit2, Trash2, Users, Search, X, ChevronDown, ChevronRight} from 'lucide-react-native';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
-import {selectIsAdmin, selectCanManage} from '@features/auth/authSlice';
+import {selectIsAdmin, selectCanManage, selectHasPerm} from '@features/auth/authSlice';
 import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
 import {AppHeader} from '@components/common';
 import {
@@ -139,6 +140,86 @@ function ChipSelector({label, options, value, onChange}) {
   );
 }
 
+// ── Date picker field ────────────────────────────────────────────────────────
+
+function DatePickerField({label, value, onChange, nullable}) {
+  const colors = useColors();
+  const [show, setShow] = useState(false);
+  const [tempDate, setTempDate] = useState(value ?? new Date());
+
+  const formatted = value ? value.toISOString().split('T')[0] : 'Not set';
+
+  function openPicker() {
+    setTempDate(value ?? new Date());
+    setShow(true);
+  }
+
+  if (Platform.OS === 'android') {
+    return (
+      <View style={{flex: 1}}>
+        <FieldLabel>{label}</FieldLabel>
+        <TouchableOpacity
+          onPress={openPicker}
+          style={[styles.dateButton, {borderColor: colors.border, backgroundColor: colors.inputBg}]}>
+          <AppText style={{color: value ? colors.text : colors.textSecondary, fontSize: fontSize.sm}}>
+            {formatted}
+          </AppText>
+        </TouchableOpacity>
+        {show && (
+          <DateTimePicker
+            value={tempDate}
+            mode="date"
+            display="default"
+            onChange={(_, date) => {
+              setShow(false);
+              if (date) onChange(date);
+            }}
+          />
+        )}
+      </View>
+    );
+  }
+
+  // iOS — show in a bottom Modal with Done button
+  return (
+    <View style={{flex: 1}}>
+      <FieldLabel>{label}</FieldLabel>
+      <TouchableOpacity
+        onPress={openPicker}
+        style={[styles.dateButton, {borderColor: colors.border, backgroundColor: colors.inputBg}]}>
+        <AppText style={{color: value ? colors.text : colors.textSecondary, fontSize: fontSize.sm}}>
+          {formatted}
+        </AppText>
+      </TouchableOpacity>
+
+      <Modal visible={show} transparent animationType="slide">
+        <View style={{flex: 1, justifyContent: 'flex-end'}}>
+          <TouchableOpacity style={{flex: 1}} activeOpacity={1} onPress={() => setShow(false)} />
+          <View style={{backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16}}>
+            {/* Toolbar */}
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border}}>
+              <TouchableOpacity onPress={() => setShow(false)}>
+                <AppText style={{color: colors.textSecondary, fontSize: fontSize.sm}}>Cancel</AppText>
+              </TouchableOpacity>
+              <AppText style={{fontWeight: '700', fontSize: fontSize.sm, color: colors.text}}>{label}</AppText>
+              <TouchableOpacity onPress={() => { onChange(tempDate); setShow(false); }}>
+                <AppText style={{color: '#7B61FF', fontWeight: '700', fontSize: fontSize.sm}}>Done</AppText>
+              </TouchableOpacity>
+            </View>
+            <DateTimePicker
+              value={tempDate}
+              mode="date"
+              display="spinner"
+              onChange={(_, date) => { if (date) setTempDate(date); }}
+              style={{height: 200}}
+            />
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 // ── Employee form modal ──────────────────────────────────────────────────────
 
 function EmpFormModal({initial, departments, orgRoles, onClose, onSave, saving}) {
@@ -151,8 +232,8 @@ function EmpFormModal({initial, departments, orgRoles, onClose, onSave, saving})
   const [employeeNumber, setEmployeeNumber] = useState(initial?.employeeNumber ?? '');
   const [employmentType, setEmploymentType] = useState(initial?.employmentType ?? 'CASUAL');
   const [baseHourlyRate, setBaseHourlyRate] = useState(initial?.baseHourlyRate != null ? String(initial.baseHourlyRate) : '');
-  const [startDate,      setStartDate]      = useState(initial?.startDate ? initial.startDate.split('T')[0] : '');
-  const [endDate,        setEndDate]        = useState(initial?.endDate   ? initial.endDate.split('T')[0]   : '');
+  const [startDate,      setStartDate]      = useState(initial?.startDate ? new Date(initial.startDate) : new Date());
+  const [endDate,        setEndDate]        = useState(initial?.endDate   ? new Date(initial.endDate)   : null);
   const [departmentId,   setDepartmentId]   = useState(initial?.departmentId ?? '');
   const [orgRoleId,      setOrgRoleId]      = useState(initial?.orgRoleId ?? '');
   const [state,          setState]          = useState(initial?.state ?? '');
@@ -178,8 +259,8 @@ function EmpFormModal({initial, departments, orgRoles, onClose, onSave, saving})
       employeeNumber: employeeNumber.trim(),
       employmentType,
       baseHourlyRate: rate,
-      startDate:      startDate || undefined,
-      endDate:        endDate   || undefined,
+      startDate:      startDate ? startDate.toISOString().split('T')[0] : undefined,
+      endDate:        endDate   ? endDate.toISOString().split('T')[0]   : undefined,
       departmentId:   departmentId || null,
       orgRoleId:      orgRoleId    || null,
       state:          state || undefined,
@@ -234,15 +315,9 @@ function EmpFormModal({initial, departments, orgRoles, onClose, onSave, saving})
               keyboardType="decimal-pad"
             />
             <View style={styles.formRow}>
-              <View style={{flex: 1}}>
-                <FieldLabel>START DATE</FieldLabel>
-                <StyledInput value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
-              </View>
+              <DatePickerField label="START DATE" value={startDate} onChange={setStartDate} />
               {isEdit && (
-                <View style={{flex: 1}}>
-                  <FieldLabel>END DATE</FieldLabel>
-                  <StyledInput value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" keyboardType="numbers-and-punctuation" />
-                </View>
+                <DatePickerField label="END DATE" value={endDate} onChange={setEndDate} nullable />
               )}
             </View>
 
@@ -380,10 +455,9 @@ export default function EmployeesScreen() {
   const navigation = useNavigation();
   const isAdmin    = useAppSelector(selectIsAdmin);
   const canManage  = useAppSelector(selectCanManage);
-
-  const canCreate = isAdmin;
-  const canEdit   = isAdmin || canManage;
-  const canDelete = isAdmin;
+  const canCreate  = useAppSelector(selectHasPerm('employees.create'));
+  const canEdit    = useAppSelector(selectHasPerm('employees.edit'));
+  const canDelete  = useAppSelector(selectHasPerm('employees.delete'));
 
   const [search,      setSearch]      = useState('');
   const [modal,       setModal]       = useState(null); // {mode:'create'} | {mode:'edit', emp}
@@ -421,6 +495,23 @@ export default function EmployeesScreen() {
       else await updateEmp({id: modal.emp.id, ...body}).unwrap();
       setModal(null);
     } catch (err) {
+      // Plan seat cap reached — mirror the web's "limit reached → upgrade" prompt
+      // instead of a generic error. (Backend throws SEAT_LIMIT_REACHED on create.)
+      if (err?.code === 'SEAT_LIMIT_REACHED') {
+        setModal(null);
+        const {limit, current} = err.details ?? {};
+        setTimeout(() => {
+          Alert.alert(
+            'Employee limit reached',
+            `Your current plan allows up to ${limit ?? 'your plan’s limit of'} employee${limit === 1 ? '' : 's'}` +
+            `${current != null ? ` (you have ${current})` : ''}. ` +
+            (isAdmin
+              ? 'Upgrade your plan or add seats from the web dashboard to keep adding employees.'
+              : 'Please ask your administrator to upgrade the plan to add more employees.'),
+          );
+        }, 300);
+        return;
+      }
       Alert.alert('Error', err?.data?.error?.message ?? err?.data ?? 'Could not save employee.');
     }
   }
@@ -601,6 +692,11 @@ const styles = StyleSheet.create({
     marginTop: spacing[4], marginBottom: spacing[2],
   },
   formRow: {flexDirection: 'row', gap: spacing[3]},
+  dateButton: {
+    borderWidth: 1, borderRadius: radius.md,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[3],
+    marginBottom: spacing[3], justifyContent: 'center',
+  },
   hint:    {fontSize: 11, marginBottom: spacing[2]},
 
   // Field components

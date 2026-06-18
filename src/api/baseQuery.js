@@ -8,10 +8,16 @@ const axiosBaseQuery = () => async ({url, method = 'GET', data, params}) => {
     // Backend wraps all responses: { success: true, data: <payload> }
     return {data: result.data.data ?? result.data};
   } catch (err) {
+    const apiErr = err.response?.data?.error;
     return {
       error: {
         status: err.response?.status ?? 'FETCH_ERROR',
-        data: err.response?.data?.message ?? err.message,
+        // `data` stays the human message (back-compat with existing screens).
+        data: apiErr?.message ?? err.response?.data?.message ?? err.message,
+        // Also surface the machine-readable code + details so screens can react
+        // to specific errors (e.g. SEAT_LIMIT_REACHED → upgrade prompt).
+        code: apiErr?.code,
+        details: apiErr?.details,
       },
     };
   }

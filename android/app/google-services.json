@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "648493947949",
+    "project_id": "onepulsework-9cd70",
+    "storage_bucket": "onepulsework-9cd70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:648493947949:android:8b430f60ff58b6f0ba6ca4",
+        "android_client_info": {
+          "package_name": "com.onepulsework"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBA98S8dBXiprG-vERbBF_x8LH8h1vH4VM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

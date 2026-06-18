@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useMemo} from 'react';
 import {View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AppHeader} from '@components/common';
@@ -13,7 +13,7 @@ import {formatTime, formatDate, formatHours} from '@utils/format';
 import {useAppSelector} from '@app/hooks';
 import {selectUser, selectEmployeeId, selectCanManage} from '@features/auth/authSlice';
 import {useGetMyStatusQuery} from '@features/attendance/attendanceApi';
-import {useGetLeaveBalanceQuery, useGetMyLeaveQuery} from '@features/leave/leaveApi';
+import {useGetLeaveBalanceQuery, useListLeaveQuery} from '@features/leave/leaveApi';
 import {useGetMyShiftsQuery} from '@features/dashboard/dashboardApi';
 import {
   useListEmployeesQuery, useListAnnouncementsQuery,
@@ -58,9 +58,9 @@ function SectionHeader({title, onPress}) {
 
 function ShiftRow({shift}) {
   const colors = useColors();
-  const start  = shift.startTime ? formatTime(shift.startTime) : '—';
-  const end    = shift.endTime   ? formatTime(shift.endTime)   : '—';
-  const date   = shift.date      ? formatDate(shift.date)      : '—';
+  const start  = formatTime(shift.startAt);
+  const end    = formatTime(shift.endAt);
+  const date   = formatDate(shift.startAt);
   return (
     <View style={[styles.listRow, {borderBottomColor: colors.border}]}>
       <View style={[styles.shiftDot, {backgroundColor: colors.primary}]} />
@@ -117,7 +117,7 @@ function EmployeeDashboard({insets}) {
               <Badge status={user?.role} label={user?.role} size="sm" />
             </View>
           </View>
-          <Avatar name={user?.fullName} size="xl" />
+          <Avatar name={user?.fullName} uri={user?.avatarUrl ?? undefined} size="xl" />
         </View>
 
         <SectionHeader title="QUICK OVERVIEW" />
@@ -147,14 +147,16 @@ function EmployeeDashboard({insets}) {
 
 function LeaveRow({req}) {
   const colors  = useColors();
-  const name    = req.employee?.user?.fullName ?? req.employee?.fullName ?? 'Unknown';
+  const name    = `${req.employee?.firstName ?? ''} ${req.employee?.lastName ?? ''}`.trim() || 'Unknown';
   const type    = req.type?.replace(/_/g, ' ') ?? 'Leave';
   const start   = req.startDate ? formatDate(req.startDate) : '—';
   const end     = req.endDate   ? formatDate(req.endDate)   : null;
-  const days    = req.days ?? req.totalDays ?? null;
+  const days    = req.startDate && req.endDate
+    ? Math.round((new Date(req.endDate) - new Date(req.startDate)) / 86400000) + 1
+    : null;
   return (
     <View style={[styles.listRow, {borderBottomColor: colors.border}]}>
-      <Avatar name={name} size="xs" />
+      <Avatar name={name} uri={req.employee?.user?.avatarUrl} size="xs" />
       <View style={styles.rowInfo}>
         <AppText style={[styles.rowTitle, {color: colors.text}]} numberOfLines={1}>{name}</AppText>
         <AppText style={[styles.rowSub, {color: colors.textSecondary}]}>
@@ -168,10 +170,10 @@ function LeaveRow({req}) {
 
 function MgmtShiftRow({shift}) {
   const colors  = useColors();
-  const empName = shift.employee?.user?.fullName ?? shift.employee?.fullName ?? null;
-  const start   = shift.startTime ? formatTime(shift.startTime) : '—';
-  const end     = shift.endTime   ? formatTime(shift.endTime)   : '—';
-  const date    = shift.date      ? formatDate(shift.date)      : '—';
+  const empName = `${shift.employee?.firstName ?? ''} ${shift.employee?.lastName ?? ''}`.trim() || null;
+  const start   = formatTime(shift.startAt);
+  const end     = formatTime(shift.endAt);
+  const date    = formatDate(shift.startAt);
   return (
     <View style={[styles.listRow, {borderBottomColor: colors.border}]}>
       <View style={[styles.shiftDot, {backgroundColor: colors.primary}]} />
@@ -208,10 +210,17 @@ function ManagementDashboard({insets}) {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const [refreshing, setRefreshing] = useState(false);
 
+  // Upcoming shifts window: today → +7 days (stable per mount to avoid refetch churn)
+  const shiftRange = useMemo(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    const w = new Date(t); w.setDate(w.getDate() + 7);
+    return {from: t.toISOString(), to: w.toISOString()};
+  }, []);
+
   const {data: orgInfo,        refetch: refetchOrg}       = useGetOrgInfoQuery();
   const {data: employeesData,  isLoading: empLoad,   refetch: refetchEmp}    = useListEmployeesQuery({limit: 1});
-  const {data: leaveData,      isLoading: leaveLoad, refetch: refetchLeave}  = useGetMyLeaveQuery({status: 'PENDING', limit: 5});
-  const {data: shiftsData,     isLoading: shiftsLoad, refetch: refetchShifts} = useListShiftsQuery({upcoming: true, limit: 5});
+  const {data: leaveData,      isLoading: leaveLoad, refetch: refetchLeave}  = useListLeaveQuery({status: 'PENDING', pageSize: 5});
+  const {data: shiftsData,     isLoading: shiftsLoad, refetch: refetchShifts} = useListShiftsQuery({page: 1, pageSize: 5, from: shiftRange.from, to: shiftRange.to});
   const {data: announcements,  isLoading: annLoad,   refetch: refetchAnn}    = useListAnnouncementsQuery({limit: 3});
 
   async function onRefresh() {
@@ -249,7 +258,7 @@ function ManagementDashboard({insets}) {
               <Badge status={user?.role} label={user?.role} size="sm" />
             </View>
           </View>
-          <Avatar name={user?.fullName} size="xl" />
+          <Avatar name={user?.fullName} uri={user?.avatarUrl ?? undefined} size="xl" />
         </View>
 
         <SectionHeader title="ORGANISATION OVERVIEW" />

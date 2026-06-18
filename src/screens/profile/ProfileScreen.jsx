@@ -1,33 +1,58 @@
 import React, {useState, useEffect, useMemo} from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Switch, KeyboardAvoidingView, Platform, TextInput,
+  Alert, KeyboardAvoidingView, Platform, Modal, ActivityIndicator,
+  Image, StatusBar,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {
   ArrowLeft, User, Shield, Palette, MapPin, Banknote,
-  Camera, Check,
+  Camera, Check, Image as ImageIcon, X, Eye, Smartphone,
 } from 'lucide-react-native';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppDispatch, useAppSelector} from '@app/hooks';
-import {selectUser, setUser} from '@features/auth/authSlice';
+import {selectUser, setUser, selectRefreshToken} from '@features/auth/authSlice';
 import {selectTheme, setTheme} from '@features/ui/uiSlice';
 import {
   useGetMyEmployeeQuery,
   useUpdateMeMutation,
   useUpdateMyEmployeeMutation,
   useChangePasswordMutation,
+  useUploadAvatarMutation,
+  useListSessionsQuery,
+  useRevokeOtherSessionsMutation,
 } from '@features/profile/profileApi';
-import {AppText, Card, Button, Input, Avatar, Badge, Spinner} from '@components/ui';
+import {AppText, Button, Input, Avatar, Badge, Spinner} from '@components/ui';
 import {formatDate} from '@utils/format';
+import {resolveMediaUrl} from '@utils/resolveMediaUrl';
 
 const AU_STATES = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
 
+/** Best-effort friendly device label from a user-agent string. */
+function deviceLabel(ua) {
+  if (!ua) return 'Unknown device';
+  const browser = /Edg/.test(ua) ? 'Edge' : /Chrome/.test(ua) ? 'Chrome' : /Firefox/.test(ua) ? 'Firefox' : /Safari/.test(ua) ? 'Safari' : /okhttp|Dalvik|Android/.test(ua) ? 'App (Android)' : /Darwin|CFNetwork|iOS/.test(ua) ? 'App (iOS)' : 'Browser';
+  const os = /Windows/.test(ua) ? 'Windows' : /Macintosh|Mac OS/.test(ua) ? 'macOS' : /Android/.test(ua) ? 'Android' : /iPhone|iPad|iOS|Darwin|CFNetwork/.test(ua) ? 'iOS' : /Linux/.test(ua) ? 'Linux' : '';
+  return os && !browser.startsWith('App') ? `${browser} on ${os}` : browser;
+}
+
+/** Compact relative time, e.g. "3h ago". */
+function timeAgo(date) {
+  if (!date) return '';
+  const s = Math.max(0, (Date.now() - new Date(date).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  const m = s / 60; if (m < 60) return `${Math.floor(m)}m ago`;
+  const h = m / 60; if (h < 24) return `${Math.floor(h)}h ago`;
+  const d = h / 24; if (d < 30) return `${Math.floor(d)}d ago`;
+  return `${Math.floor(d / 30)}mo ago`;
+}
+
 // ── Hero ───────────────────────────────────────────────────────────────────
 
-function ProfileHero({user, emp}) {
+function ProfileHero({user, emp, onPickAvatar, uploadingAvatar}) {
   const colors = useColors();
   const chips  = emp ? [
     emp.employmentType?.replace(/_/g, ' '),
@@ -45,12 +70,15 @@ function ProfileHero({user, emp}) {
 
       {/* Avatar row */}
       <View style={styles.heroBody}>
-        <View style={styles.avatarWrap}>
-          <Avatar name={user?.fullName} size={80} />
-          <View style={[styles.cameraBtn, {backgroundColor: colors.primary}]}>
-            <Camera size={14} color={colors.white} />
+        <TouchableOpacity onPress={onPickAvatar} activeOpacity={0.8} style={styles.avatarWrap}>
+          <Avatar name={user?.fullName} uri={user?.avatarUrl ?? undefined} size={80} />
+          <View style={[styles.cameraBtn, {backgroundColor: uploadingAvatar ? colors.textSecondary : colors.primary}]}>
+            {uploadingAvatar
+              ? <ActivityIndicator size={10} color={colors.white} />
+              : <Camera size={14} color={colors.white} />
+            }
           </View>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.heroInfo}>
           <AppText style={[styles.heroName, {color: colors.text}]} numberOfLines={1}>
@@ -199,7 +227,7 @@ function ProfileTab({user, emp}) {
   async function handleSave() {
     if (!fullName.trim()) { Alert.alert('Required', 'Name cannot be empty.'); return; }
     try {
-      const updated = await updateMe({fullName: fullName.trim(), phone: phone.trim() || undefined}).unwrap();
+      const updated = await updateMe({fullName: fullName.trim(), phone: phone.trim()}).unwrap();
       dispatch(setUser(updated));
       Alert.alert('Saved', 'Profile updated successfully.');
     } catch (err) {
@@ -262,7 +290,85 @@ function SecurityTab() {
         <Input label="Confirm password" value={confirm} onChangeText={setConfirm} secureTextEntry />
         <Button label={isLoading ? 'Updating…' : 'Update Password'} loading={isLoading} onPress={handleChange} style={styles.saveBtn} />
       </SectionCard>
+
+      <ActiveSessionsCard />
     </View>
+  );
+}
+
+// ── Active sessions ────────────────────────────────────────────────────────
+
+function ActiveSessionsCard() {
+  const colors = useColors();
+  const refreshToken = useAppSelector(selectRefreshToken);
+  const {data: sessions, isLoading} = useListSessionsQuery(refreshToken ?? undefined);
+  const [revokeOthers, {isLoading: revoking}] = useRevokeOtherSessionsMutation();
+
+  const others = (sessions ?? []).filter(s => !s.current).length;
+
+  function confirmRevoke() {
+    Alert.alert(
+      'Sign out other devices?',
+      'This revokes every other session. Other devices will need to sign in again. This device stays signed in.',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Sign out others', style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await revokeOthers(refreshToken).unwrap();
+              Alert.alert('Done', res?.revoked ? `Signed out ${res.revoked} other session${res.revoked !== 1 ? 's' : ''}.` : 'No other sessions to sign out.');
+            } catch (err) {
+              Alert.alert('Error', err.data ?? 'Could not sign out other devices.');
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  return (
+    <SectionCard title="Active sessions" subtitle="Devices currently signed in to your account.">
+      {isLoading ? (
+        <View style={{paddingVertical: spacing[4], alignItems: 'center'}}><Spinner /></View>
+      ) : (sessions ?? []).length === 0 ? (
+        <AppText style={{fontSize: fontSize.sm, color: colors.textSecondary}}>No active sessions.</AppText>
+      ) : (
+        <View style={{gap: spacing[2]}}>
+          {sessions.map(s => (
+            <View
+              key={s.id}
+              style={[styles.sessionRow, {backgroundColor: colors.surfaceAlt, borderColor: s.current ? colors.primary : colors.border}]}>
+              <View style={[styles.sessionIcon, {backgroundColor: colors.surface, borderColor: colors.border}]}>
+                <Smartphone size={18} color={colors.textSecondary} />
+              </View>
+              <View style={{flex: 1, minWidth: 0}}>
+                <View style={{flexDirection: 'row', alignItems: 'center', gap: spacing[2], flexWrap: 'wrap'}}>
+                  <AppText style={[styles.sessionDevice, {color: colors.text}]} numberOfLines={1}>{deviceLabel(s.userAgent)}</AppText>
+                  {s.current && (
+                    <View style={[styles.sessionChip, {backgroundColor: colors.primaryLight}]}>
+                      <AppText style={[styles.sessionChipText, {color: colors.primary}]}>This device</AppText>
+                    </View>
+                  )}
+                </View>
+                <AppText style={[styles.sessionMeta, {color: colors.textSecondary}]} numberOfLines={1}>
+                  {(s.ipAddress ?? 'Unknown IP')} · signed in {timeAgo(s.createdAt)}
+                </AppText>
+              </View>
+            </View>
+          ))}
+
+          <Button
+            label={revoking ? 'Signing out…' : `Sign out other devices${others > 0 ? ` (${others})` : ''}`}
+            variant="outline"
+            loading={revoking}
+            disabled={others === 0}
+            onPress={confirmRevoke}
+            style={styles.saveBtn}
+          />
+        </View>
+      )}
+    </SectionCard>
   );
 }
 
@@ -435,16 +541,124 @@ function FinancialTab({emp}) {
   );
 }
 
+// ── Full-screen avatar viewer ──────────────────────────────────────────────
+
+function AvatarViewer({visible, uri, onClose}) {
+  console.log(uri)
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+      statusBarTranslucent>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <View style={styles.viewerRoot}>
+        <Image source={{uri: resolveMediaUrl(uri)}} style={styles.viewerImage} resizeMode="contain" />
+        <TouchableOpacity
+          onPress={onClose}
+          style={[styles.viewerClose, {top: insets.top + 12}]}
+          activeOpacity={0.75}
+          hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+          <X size={22} color="#fff" strokeWidth={2.2} />
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+}
+
+// ── Avatar source picker modal ─────────────────────────────────────────────
+
+function AvatarPickerModal({visible, onClose, onCamera, onGallery, onView, avatarUrl}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.pickerOverlay}>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+        <View style={[styles.pickerSheet, {backgroundColor: colors.surface, paddingBottom: insets.bottom + spacing[4]}]}>
+          <View style={[styles.pickerHandle, {backgroundColor: colors.border}]} />
+          <AppText style={[styles.pickerTitle, {color: colors.text}]}>Profile Photo</AppText>
+
+          {avatarUrl ? (
+            <TouchableOpacity
+              onPress={onView}
+              style={[styles.pickerOption, {borderColor: colors.border}]}
+              activeOpacity={0.7}>
+              <View style={[styles.pickerIconWrap, {backgroundColor: colors.infoLight}]}>
+                <Eye size={22} color={colors.info} />
+              </View>
+              <View style={styles.pickerOptionText}>
+                <AppText style={[styles.pickerOptionLabel, {color: colors.text}]}>View Photo</AppText>
+                <AppText style={[styles.pickerOptionSub, {color: colors.textSecondary}]}>See your current photo</AppText>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            onPress={() => { onClose(); setTimeout(onCamera, 250); }}
+            style={[styles.pickerOption, {borderColor: colors.border}]}
+            activeOpacity={0.7}>
+            <View style={[styles.pickerIconWrap, {backgroundColor: colors.primaryLight}]}>
+              <Camera size={22} color={colors.primary} />
+            </View>
+            <View style={styles.pickerOptionText}>
+              <AppText style={[styles.pickerOptionLabel, {color: colors.text}]}>Take Photo</AppText>
+              <AppText style={[styles.pickerOptionSub, {color: colors.textSecondary}]}>Use your camera</AppText>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => { onClose(); setTimeout(onGallery, 250); }}
+            style={[styles.pickerOption, {borderColor: colors.border}]}
+            activeOpacity={0.7}>
+            <View style={[styles.pickerIconWrap, {backgroundColor: colors.primaryLight}]}>
+              <ImageIcon size={22} color={colors.primary} />
+            </View>
+            <View style={styles.pickerOptionText}>
+              <AppText style={[styles.pickerOptionLabel, {color: colors.text}]}>Choose from Gallery</AppText>
+              <AppText style={[styles.pickerOptionSub, {color: colors.textSecondary}]}>Browse your photos</AppText>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onClose}
+            style={[styles.pickerCancel, {backgroundColor: colors.surfaceAlt}]}
+            activeOpacity={0.7}>
+            <AppText style={[styles.pickerCancelLabel, {color: colors.textSecondary}]}>Cancel</AppText>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ── Main screen ────────────────────────────────────────────────────────────
+
+const PICKER_OPTIONS = {
+  mediaType: 'photo',
+  quality: 0.85,
+  maxWidth: 800,
+  maxHeight: 800,
+};
 
 export default function ProfileScreen() {
   const colors     = useColors();
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation();
+  const dispatch   = useAppDispatch();
   const user       = useAppSelector(selectUser);
   const [activeTab, setTab] = useState('profile');
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
 
   const {data: emp, isError: noEmp, isLoading: empLoading} = useGetMyEmployeeQuery();
+  const [uploadAvatar, {isLoading: uploading}] = useUploadAvatarMutation();
   const hasEmp = !noEmp && !!emp;
 
   const TABS = useMemo(() => [
@@ -456,6 +670,30 @@ export default function ProfileScreen() {
       {id: 'financial', label: 'Financial'},
     ] : []),
   ], [hasEmp]);
+
+  async function handleAvatarAsset(asset) {
+    if (!asset) return;
+    try {
+      const updated = await uploadAvatar(asset).unwrap();
+      dispatch(setUser(updated));
+    } catch (err) {
+      Alert.alert('Upload Failed', err.data ?? 'Could not upload photo. Please try again.');
+    }
+  }
+
+  function openCamera() {
+    launchCamera(PICKER_OPTIONS, res => {
+      if (res.didCancel || res.errorCode) return;
+      handleAvatarAsset(res.assets?.[0]);
+    });
+  }
+
+  function openGallery() {
+    launchImageLibrary(PICKER_OPTIONS, res => {
+      if (res.didCancel || res.errorCode) return;
+      handleAvatarAsset(res.assets?.[0]);
+    });
+  }
 
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
@@ -483,7 +721,12 @@ export default function ProfileScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled">
 
-            <ProfileHero user={user} emp={hasEmp ? emp : null} />
+            <ProfileHero
+              user={user}
+              emp={hasEmp ? emp : null}
+              onPickAvatar={() => setPickerVisible(true)}
+              uploadingAvatar={uploading}
+            />
 
             {activeTab === 'profile'    && <ProfileTab    user={user} emp={hasEmp ? emp : null} />}
             {activeTab === 'security'   && <SecurityTab />}
@@ -493,6 +736,24 @@ export default function ProfileScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       )}
+
+      {/* Both modals are siblings of the screen root — never nested inside each other */}
+      <AvatarPickerModal
+        visible={pickerVisible}
+        onClose={() => setPickerVisible(false)}
+        onCamera={openCamera}
+        onGallery={openGallery}
+        avatarUrl={user?.avatarUrl ?? null}
+        onView={() => { setPickerVisible(false); setTimeout(() => setViewerVisible(true), 300); }}
+      />
+
+      {user?.avatarUrl ? (
+        <AvatarViewer
+          visible={viewerVisible}
+          uri={user.avatarUrl}
+          onClose={() => setViewerVisible(false)}
+        />
+      ) : null}
     </View>
   );
 }
@@ -602,4 +863,68 @@ const styles = StyleSheet.create({
   infoAlert: {borderWidth: 1, borderRadius: radius.md, padding: spacing[4], marginBottom: spacing[4]},
   infoAlertText: {fontSize: fontSize.sm},
   bsbRow:    {flexDirection: 'row'},
+
+  // Sessions
+  sessionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[3],
+    borderWidth: 1, borderRadius: radius.md, padding: spacing[3],
+  },
+  sessionIcon: {
+    width: 38, height: 38, borderRadius: radius.md, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sessionDevice:   {fontSize: fontSize.sm, fontWeight: fontWeight.semiBold},
+  sessionMeta:     {fontSize: 11, marginTop: 2},
+  sessionChip:     {paddingHorizontal: spacing[2], paddingVertical: 2, borderRadius: radius.full},
+  sessionChipText: {fontSize: 10, fontWeight: fontWeight.bold},
+
+  // Avatar picker modal
+  pickerOverlay: {
+    flex: 1, justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  pickerSheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingTop: spacing[3],
+    paddingHorizontal: spacing[5],
+  },
+  pickerHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    alignSelf: 'center', marginBottom: spacing[4],
+  },
+  pickerTitle: {
+    fontSize: fontSize.base, fontWeight: fontWeight.bold,
+    textAlign: 'center', marginBottom: spacing[5],
+  },
+  pickerOption: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing[4],
+    paddingVertical: spacing[4], borderBottomWidth: 1,
+  },
+  pickerIconWrap: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pickerOptionText: {flex: 1},
+  pickerOptionLabel: {fontSize: fontSize.base, fontWeight: fontWeight.semiBold},
+  pickerOptionSub:   {fontSize: fontSize.sm, marginTop: 2},
+  pickerCancel: {
+    borderRadius: radius.md, paddingVertical: spacing[4],
+    alignItems: 'center', marginTop: spacing[4],
+  },
+  pickerCancelLabel: {fontSize: fontSize.base, fontWeight: fontWeight.semiBold},
+
+  // Full-screen viewer
+  viewerRoot: {
+    flex: 1, backgroundColor: '#000',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  viewerImage: {
+    width: '100%', height: '100%',
+  },
+  viewerClose: {
+    position: 'absolute', right: 16,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center', justifyContent: 'center',
+  },
 });

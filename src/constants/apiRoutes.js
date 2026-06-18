@@ -9,9 +9,11 @@ export const API = {
     REGISTER: `${BASE}/auth/register`,
     ACCEPT_INVITE: `${BASE}/auth/accept-invite`,
     CHANGE_PASSWORD: `${BASE}/auth/change-password`,
-    AVATAR: `${BASE}/auth/avatar`,
+    AVATAR: `${BASE}/auth/me/avatar`,
     FORGOT_PASSWORD: `${BASE}/auth/forgot-password`,
     RESET_PASSWORD: `${BASE}/auth/reset-password`,
+    SESSIONS: `${BASE}/auth/sessions`,
+    SESSIONS_REVOKE_OTHERS: `${BASE}/auth/sessions/revoke-others`,
   },
   EMPLOYEE: {
     LIST: `${BASE}/org/employees`,
@@ -39,7 +41,13 @@ export const API = {
   SHIFT: {
     LIST: `${BASE}/org/shifts`,
     MY: `${BASE}/org/shifts/my`,
+    BULK: `${BASE}/org/shifts/bulk`,
+    AUTO_ASSIGN: `${BASE}/org/shifts/auto-assign`,
     DETAIL: id => `${BASE}/org/shifts/${id}`,
+  },
+  SHIFT_TEMPLATE: {
+    LIST: `${BASE}/org/shift-templates`,
+    DETAIL: id => `${BASE}/org/shift-templates/${id}`,
   },
   PAYROLL: {
     POLICY:       `${BASE}/org/payroll/policy`,
@@ -55,13 +63,16 @@ export const API = {
     PAYSLIP:      id => `${BASE}/org/payroll/payslips/${id}`,
   },
   NOTIFICATION: {
-    LIST: `${BASE}/org/notifications`,
-    READ: id => `${BASE}/org/notifications/${id}/read`,
-    READ_ALL: `${BASE}/org/notifications/read-all`,
-    PUSH_TOKEN: `${BASE}/org/notifications/push-token`,
+    LIST:        `${BASE}/org/notifications`,
+    READ:        id => `${BASE}/org/notifications/${id}/read`,
+    READ_ALL:    `${BASE}/org/notifications/read-all`,
+    DELETE:      id => `${BASE}/org/notifications/${id}`,
+    PREFERENCES: `${BASE}/org/notifications/preferences`,
+    PUSH_TOKEN:  `${BASE}/org/notifications/push-token`,
   },
   PROJECT: {
     LIST: `${BASE}/org/projects`,
+    OPTIONS: `${BASE}/org/projects/options`,
     DETAIL: id => `${BASE}/org/projects/${id}`,
   },
   TASK: {
@@ -105,11 +116,20 @@ export const API = {
   },
   ORGANISATION: {
     ME:     `${BASE}/org/organisation/me`,
+    LOGO:   `${BASE}/org/organisation/me/logo`,
     POLICY: `${BASE}/org/organisation/policy`,
   },
   USER: {
     LIST:   `${BASE}/org/users`,
     INVITE: `${BASE}/org/users/invite`,
     DETAIL: id => `${BASE}/org/users/${id}`,
+    FORCE_LOGOUT:   id => `${BASE}/org/users/${id}/force-logout`,
+    RESET_PASSWORD: id => `${BASE}/org/users/${id}/reset-password`,
+  },
+  HOLIDAY: {
+    LIST:  `${BASE}/reference/public-holidays`, // read — all authenticated users
+    ADMIN: `${BASE}/org/holidays`,              // create — holidays.manage
+    SEED:  `${BASE}/org/holidays/seed`,         // import AU holidays for a year
+    BY_ID: id => `${BASE}/org/holidays/${id}`,  // update / delete
   },
 };

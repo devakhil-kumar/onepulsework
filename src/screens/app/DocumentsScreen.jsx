@@ -8,13 +8,14 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {
   ArrowLeft, Plus, Edit2, Trash2, Download, FileText,
-  Search, X, ChevronDown, Eye, Users, Lock, Globe,
+  Search, X, ChevronDown, Eye, Users, Lock, Globe, UploadCloud,
 } from 'lucide-react-native';
+import {launchCamera, launchImageLibrary} from 'react-native-image-picker';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin} from '@features/auth/authSlice';
-import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
+import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar, MultiSelectField} from '@components/ui';
 import {AppHeader} from '@components/common';
 import {
   useListDocumentsQuery,
@@ -22,6 +23,8 @@ import {
   useUpdateDocumentMutation,
   useDeleteDocumentMutation,
   fetchDocumentBuffer,
+  openDocumentInViewer,
+  arrayBufferToBase64,
 } from '@features/document/documentApi';
 import {useListEmployeesQuery} from '@features/employee/employeeApi';
 import {formatDate} from '@utils/format';
@@ -84,6 +87,32 @@ function StyledInput({value, onChangeText, ...props}) {
   );
 }
 
+// One control for visibility: pick "Everyone" or specific employees in a single
+// multi-select. "Everyone" is mutually exclusive with individual picks.
+const EVERYONE = '__all__';
+function VisibilityPicker({employees, visibleToAll, visibleToIds, onChange}) {
+  const value = visibleToAll ? [EVERYONE] : visibleToIds;
+  const options = [
+    {value: EVERYONE, label: '🌐  Everyone (all employees)'},
+    ...employees.map(e => ({value: e.id, label: `${e.firstName} ${e.lastName}`})),
+  ];
+  function handle(next) {
+    let result = next;
+    if (next.includes(EVERYONE) && next.length > 1) {
+      const justAddedAll = !value.includes(EVERYONE);
+      result = justAddedAll ? [EVERYONE] : next.filter(v => v !== EVERYONE);
+    }
+    const all = result.length === 0 || result.includes(EVERYONE);
+    onChange({visibleToAll: all, visibleToIds: all ? [] : result});
+  }
+  return (
+    <>
+      <FieldLabel>WHO CAN SEE THIS?</FieldLabel>
+      <MultiSelectField value={value} onChange={handle} options={options} placeholder="Everyone, or search employees…" />
+    </>
+  );
+}
+
 function InlineDropdown({label, value, options, onChange}) {
   const colors = useColors();
   const [open, setOpen] = useState(false);
@@ -110,66 +139,6 @@ function InlineDropdown({label, value, options, onChange}) {
               </AppText>
             </TouchableOpacity>
           ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
-// ── Employee multi-select (for visibility: selected) ───────────────────────
-
-function EmpMultiSelect({selectedIds, onChange, employees}) {
-  const colors = useColors();
-  const [search, setSearch] = useState('');
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return employees;
-    const q = search.toLowerCase();
-    return employees.filter(e =>
-      `${e.firstName} ${e.lastName}`.toLowerCase().includes(q),
-    );
-  }, [employees, search]);
-
-  function toggle(id) {
-    if (selectedIds.includes(id)) onChange(selectedIds.filter(i => i !== id));
-    else onChange([...selectedIds, id]);
-  }
-
-  return (
-    <View style={[styles.empMulti, {borderColor: colors.border}]}>
-      <View style={[styles.empMultiSearch, {backgroundColor: colors.surfaceAlt, borderColor: colors.border}]}>
-        <Search size={13} color={colors.textTertiary} />
-        <TextInput
-          style={[styles.empMultiInput, {color: colors.text}]}
-          value={search} onChangeText={setSearch}
-          placeholder="Search employees…" placeholderTextColor={colors.textTertiary}
-          autoCapitalize="none"
-        />
-      </View>
-      <ScrollView style={styles.empMultiList} nestedScrollEnabled>
-        {filtered.map(e => {
-          const name = `${e.firstName} ${e.lastName}`;
-          const checked = selectedIds.includes(e.id);
-          return (
-            <TouchableOpacity key={e.id} onPress={() => toggle(e.id)}
-              style={[styles.empMultiRow, {borderBottomColor: colors.border}, checked && {backgroundColor: colors.primaryLight}]}>
-              <View style={[styles.checkbox, {borderColor: checked ? colors.primary : colors.border, backgroundColor: checked ? colors.primary : 'transparent'}]}>
-                {checked && <AppText style={{color: '#fff', fontSize: 10, lineHeight: 14}}>✓</AppText>}
-              </View>
-              <Avatar name={name} size="xs" />
-              <AppText style={{fontSize: fontSize.sm, color: colors.text, flex: 1}} numberOfLines={1}>{name}</AppText>
-            </TouchableOpacity>
-          );
-        })}
-        {filtered.length === 0 && (
-          <AppText style={[styles.empMultiEmpty, {color: colors.textSecondary}]}>No employees found</AppText>
-        )}
-      </ScrollView>
-      {selectedIds.length > 0 && (
-        <View style={[styles.empMultiSummary, {borderTopColor: colors.border}]}>
-          <AppText style={[styles.empMultiSummaryText, {color: colors.textSecondary}]}>
-            {selectedIds.length} employee{selectedIds.length > 1 ? 's' : ''} selected
-          </AppText>
         </View>
       )}
     </View>
@@ -209,35 +178,99 @@ function ImageViewerModal({visible, uri, title, onClose}) {
 
 // ── Upload modal ───────────────────────────────────────────────────────────
 
+const IMG_PICKER_OPTS = {mediaType: 'photo', quality: 0.85, maxWidth: 2200, maxHeight: 2200};
+
+function stripExt(name) {
+  if (!name) return '';
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(0, dot) : name;
+}
+
 function UploadModal({onClose, onSave, saving, employees}) {
   const colors = useColors();
   const [title,        setTitle]       = useState('');
   const [description,  setDesc]        = useState('');
   const [category,     setCategory]    = useState('other');
-  const [visibility,   setVisibility]  = useState('all');
-  const [visIds,       setVisIds]      = useState([]);
+  const [vis,          setVis]         = useState({visibleToAll: true, visibleToIds: []});
+  const [file,         setFile]        = useState(null); // {uri, name, type, size}
 
-  const visibilityOpts = [
-    {code: 'all',      name: 'All Employees'},
-    {code: 'selected', name: 'Selected Employees'},
-  ];
+  // Pick the chosen file and pre-fill the title from its name if still empty
+  function applyFile(f) {
+    setFile(f);
+    setTitle(t => (t.trim() ? t : stripExt(f.name)));
+  }
+
+  function pickFromGallery() {
+    launchImageLibrary(IMG_PICKER_OPTS, res => {
+      if (res.didCancel || res.errorCode) return;
+      const a = res.assets?.[0];
+      if (a?.uri) applyFile({uri: a.uri, name: a.fileName || `photo_${Date.now()}.jpg`, type: a.type || 'image/jpeg', size: a.fileSize});
+    });
+  }
+
+  function takePhoto() {
+    launchCamera(IMG_PICKER_OPTS, res => {
+      if (res.didCancel || res.errorCode) {
+        if (res.errorCode === 'camera_unavailable' || res.errorCode === 'permission') {
+          Alert.alert('Camera unavailable', 'Please allow camera access to take a photo.');
+        }
+        return;
+      }
+      const a = res.assets?.[0];
+      if (a?.uri) applyFile({uri: a.uri, name: a.fileName || `photo_${Date.now()}.jpg`, type: a.type || 'image/jpeg', size: a.fileSize});
+    });
+  }
+
+  async function pickDocument() {
+    let picker;
+    try {
+      picker = require('@react-native-documents/picker');
+    } catch {
+      Alert.alert('Update needed', 'Picking PDF / document files needs the latest app build. Photos work now — rebuild the app to enable file picking.');
+      return;
+    }
+    try {
+      const allowed = [
+        picker.types.pdf, picker.types.images, picker.types.doc, picker.types.docx,
+        picker.types.plainText, picker.types.xls, picker.types.xlsx, picker.types.csv,
+      ].filter(Boolean);
+      const results = await picker.pick({type: allowed, allowMultiSelection: false});
+      const res = Array.isArray(results) ? results[0] : results;
+      if (res?.uri) applyFile({uri: res.uri, name: res.name || 'document', type: res.type || 'application/octet-stream', size: res.size});
+    } catch (err) {
+      if (picker.isErrorWithCode?.(err) && err.code === picker.errorCodes?.OPERATION_CANCELED) return;
+      const m = String(err?.message ?? '');
+      if (/native module|not available|TurboModule|RNDocumentPicker|getEnforcing/i.test(m)) {
+        Alert.alert('Update needed', 'PDF / document picking needs the latest app build. Photos work now — rebuild the app to enable file picking.');
+      } else {
+        Alert.alert('Error', 'Could not pick the file. Please try again.');
+      }
+    }
+  }
 
   function handlePickFile() {
-    Alert.alert(
-      'File Upload',
-      'To upload files from mobile, install react-native-document-picker.\n\nYou can also upload documents from the web portal.',
-      [{text: 'OK'}],
-    );
+    Alert.alert('Add a file', 'Choose where to pick from', [
+      {text: 'Photo Library', onPress: pickFromGallery},
+      {text: 'Take Photo',    onPress: takePhoto},
+      {text: 'PDF / Document', onPress: pickDocument},
+      {text: 'Cancel', style: 'cancel'},
+    ]);
   }
 
   function handleSave() {
+    if (!file)         { Alert.alert('Required', 'Please choose a file to upload.'); return; }
     if (!title.trim()) { Alert.alert('Required', 'Title is required.'); return; }
-    // File picking not available without document picker library
-    Alert.alert(
-      'Upload Not Available',
-      'File upload from mobile requires react-native-document-picker to be installed.\n\nPlease upload from the web portal.',
-    );
+    onSave({
+      file,
+      title:        title.trim(),
+      description:  description.trim(),
+      category,
+      visibleToAll: vis.visibleToAll,
+      visibleToIds: vis.visibleToIds,
+    });
   }
+
+  const isImageFile = file?.type?.startsWith('image/');
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
@@ -249,18 +282,44 @@ function UploadModal({onClose, onSave, saving, employees}) {
           </View>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-            {/* File picker notice */}
-            <TouchableOpacity
-              onPress={handlePickFile}
-              style={[styles.filePicker, {borderColor: colors.primary, backgroundColor: colors.primaryLight}]}>
-              <FileText size={20} color={colors.primary} />
-              <View style={{flex: 1}}>
-                <AppText style={[styles.filePickerTitle, {color: colors.primary}]}>Choose File</AppText>
-                <AppText style={[styles.filePickerSub, {color: colors.primary}]}>
-                  Tap for info about mobile upload
-                </AppText>
+            {/* File picker */}
+            {!file ? (
+              <TouchableOpacity
+                onPress={handlePickFile}
+                style={[styles.filePicker, {borderColor: colors.primary, backgroundColor: colors.primaryLight}]}>
+                <UploadCloud size={22} color={colors.primary} />
+                <View style={{flex: 1}}>
+                  <AppText style={[styles.filePickerTitle, {color: colors.primary}]}>Choose a file</AppText>
+                  <AppText style={[styles.filePickerSub, {color: colors.primary}]}>
+                    Photo, PDF or document
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.selectedFile, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}>
+                {isImageFile ? (
+                  <Image source={{uri: file.uri}} style={styles.selectedThumb} />
+                ) : (
+                  <View style={[styles.selectedThumb, styles.selectedThumbDoc, {backgroundColor: getMimeLabel(file.type).color + '18'}]}>
+                    <AppText style={{fontSize: 11, fontWeight: fontWeight.bold, color: getMimeLabel(file.type).color}}>
+                      {getMimeLabel(file.type).label}
+                    </AppText>
+                  </View>
+                )}
+                <View style={{flex: 1, minWidth: 0}}>
+                  <AppText style={[styles.selectedName, {color: colors.text}]} numberOfLines={1}>{file.name}</AppText>
+                  <AppText style={[styles.selectedSize, {color: colors.textSecondary}]}>
+                    {formatSize(file.size)} · Tap to change
+                  </AppText>
+                </View>
+                <TouchableOpacity onPress={handlePickFile} hitSlop={{top: 8, left: 8, bottom: 8, right: 8}}>
+                  <AppText style={{color: colors.primary, fontSize: fontSize.sm, fontWeight: fontWeight.semiBold}}>Change</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setFile(null)} hitSlop={{top: 8, left: 8, bottom: 8, right: 8}}>
+                  <X size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            )}
 
             <FieldLabel>TITLE *</FieldLabel>
             <StyledInput value={title} onChangeText={setTitle} placeholder="e.g. Employment Contract 2025" />
@@ -272,14 +331,7 @@ function UploadModal({onClose, onSave, saving, employees}) {
             <InlineDropdown label="CATEGORY" value={category}
               options={CATEGORIES.map(c => ({code: c.code, name: c.name}))} onChange={setCategory} />
 
-            <InlineDropdown label="VISIBILITY" value={visibility} options={visibilityOpts} onChange={setVisibility} />
-
-            {visibility === 'selected' && (
-              <>
-                <FieldLabel>SELECT EMPLOYEES</FieldLabel>
-                <EmpMultiSelect selectedIds={visIds} onChange={setVisIds} employees={employees} />
-              </>
-            )}
+            <VisibilityPicker employees={employees} visibleToAll={vis.visibleToAll} visibleToIds={vis.visibleToIds} onChange={setVis} />
 
             <Button label="Upload Document" variant="primary" fullWidth loading={saving}
               onPress={handleSave} style={{marginTop: spacing[4], marginBottom: spacing[8]}} />
@@ -297,13 +349,10 @@ function EditModal({doc, onClose, onSave, saving, employees}) {
   const [title,       setTitle]      = useState(doc?.title ?? '');
   const [description, setDesc]       = useState(doc?.description ?? '');
   const [category,    setCategory]   = useState(doc?.category ?? 'other');
-  const [visibility,  setVisibility] = useState(doc?.visibleToAll === false ? 'selected' : 'all');
-  const [visIds,      setVisIds]     = useState(doc?.visibleToIds ?? []);
-
-  const visibilityOpts = [
-    {code: 'all',      name: 'All Employees'},
-    {code: 'selected', name: 'Selected Employees'},
-  ];
+  const [vis,         setVis]        = useState({
+    visibleToAll: doc?.visibleToAll !== false,
+    visibleToIds: doc?.visibleToIds ?? [],
+  });
 
   function handleSave() {
     if (!title.trim()) { Alert.alert('Required', 'Title is required.'); return; }
@@ -311,8 +360,8 @@ function EditModal({doc, onClose, onSave, saving, employees}) {
       title:        title.trim(),
       description:  description.trim() || '',
       category,
-      visibleToAll: visibility === 'all',
-      visibleToIds: visibility === 'selected' ? visIds : [],
+      visibleToAll: vis.visibleToAll,
+      visibleToIds: vis.visibleToIds,
     });
   }
 
@@ -346,14 +395,7 @@ function EditModal({doc, onClose, onSave, saving, employees}) {
             <InlineDropdown label="CATEGORY" value={category}
               options={CATEGORIES.map(c => ({code: c.code, name: c.name}))} onChange={setCategory} />
 
-            <InlineDropdown label="VISIBILITY" value={visibility} options={visibilityOpts} onChange={setVisibility} />
-
-            {visibility === 'selected' && (
-              <>
-                <FieldLabel>SELECT EMPLOYEES</FieldLabel>
-                <EmpMultiSelect selectedIds={visIds} onChange={setVisIds} employees={employees} />
-              </>
-            )}
+            <VisibilityPicker employees={employees} visibleToAll={vis.visibleToAll} visibleToIds={vis.visibleToIds} onChange={setVis} />
 
             <Button label={saving ? 'Saving…' : 'Save Changes'} variant="primary" fullWidth
               loading={saving} onPress={handleSave}
@@ -486,8 +528,8 @@ export default function DocumentsScreen() {
   const [updateDoc,  {isLoading: updating}]  = useUpdateDocumentMutation();
   const [deleteDoc,  {isLoading: deleting}]  = useDeleteDocumentMutation();
 
-  const documents  = Array.isArray(data) ? data : (data?.items ?? []);
-  const employees  = Array.isArray(empData) ? empData : (empData?.items ?? []);
+  const documents  = useMemo(() => Array.isArray(data) ? data : (data?.items ?? []), [data]);
+  const employees  = useMemo(() => Array.isArray(empData) ? empData : (empData?.items ?? []), [empData]);
 
   const CAT_FILTERS = [{code: 'all', name: 'All'}, ...CATEGORIES];
 
@@ -513,29 +555,36 @@ export default function DocumentsScreen() {
 
   async function handleView(doc) {
     const isImage = INLINEABLE_IMAGE.has(doc.mimeType);
-
-    if (isImage) {
-      setLoadingDocId(doc.id);
-      try {
+    setLoadingDocId(doc.id);
+    try {
+      if (isImage) {
+        // Inline preview: fetch → base64 data URI
         const buffer = await fetchDocumentBuffer(doc.id, true);
-        // Convert arraybuffer → base64 → data URI
-        const bytes  = new Uint8Array(buffer);
-        let binary   = '';
-        for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-        const b64    = btoa(binary);
-        const uri    = `data:${doc.mimeType};base64,${b64}`;
+        const uri = `data:${doc.mimeType};base64,${arrayBufferToBase64(buffer)}`;
         setImageViewer({uri, title: doc.title});
-      } catch {
-        Alert.alert('Error', 'Could not load image.');
-      } finally {
-        setLoadingDocId(null);
+      } else {
+        // PDFs and other files: download and open in the device's native viewer
+        await openDocumentInViewer(doc);
       }
-    } else {
-      Alert.alert(
-        doc.title,
-        `File: ${doc.fileName}\nSize: ${formatSize(doc.sizeBytes)}\nType: ${doc.mimeType ?? 'Unknown'}\n\nTo download this document, please use the web portal.`,
-        [{text: 'OK'}],
-      );
+    } catch (e) {
+      const m = String(e?.message ?? '');
+      if (/native module|not available|TurboModule|RNBlobUtil|getEnforcing/i.test(m)) {
+        Alert.alert('Update needed', 'Opening files needs the latest app build. Please rebuild the app, then try again.');
+      } else {
+        Alert.alert('Could not open', isImage ? 'Could not load this image.' : 'This file could not be opened on your device.');
+      }
+    } finally {
+      setLoadingDocId(null);
+    }
+  }
+
+  async function handleUpload(payload) {
+    try {
+      await uploadDoc(payload).unwrap();
+      setShowUpload(false);
+    } catch (e) {
+      const msg = e?.data?.error?.message ?? (typeof e?.data === 'string' ? e.data : null) ?? 'Could not upload document. Please try again.';
+      Alert.alert('Upload Failed', msg);
     }
   }
 
@@ -670,7 +719,7 @@ export default function DocumentsScreen() {
       {showUpload && (
         <UploadModal
           onClose={() => setShowUpload(false)}
-          onSave={() => setShowUpload(false)}
+          onSave={handleUpload}
           saving={uploading}
           employees={employees}
         />
@@ -773,6 +822,13 @@ const styles = StyleSheet.create({
   filePicker:     {flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[4], borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', marginBottom: spacing[4]},
   filePickerTitle:{fontSize: fontSize.sm, fontWeight: fontWeight.semiBold},
   filePickerSub:  {fontSize: fontSize.xs, marginTop: 2},
+
+  // Selected file row
+  selectedFile:     {flexDirection: 'row', alignItems: 'center', gap: spacing[3], padding: spacing[3], borderRadius: radius.md, borderWidth: 1, marginBottom: spacing[4]},
+  selectedThumb:    {width: 44, height: 44, borderRadius: radius.sm, flexShrink: 0},
+  selectedThumbDoc: {alignItems: 'center', justifyContent: 'center'},
+  selectedName:     {fontSize: fontSize.sm, fontWeight: fontWeight.semiBold},
+  selectedSize:     {fontSize: fontSize.xs, marginTop: 2},
 
   // File info row (edit modal)
   fileInfo:     {flexDirection: 'row', alignItems: 'center', gap: spacing[2], padding: spacing[3], borderRadius: radius.md, borderWidth: 1, marginBottom: spacing[3]},

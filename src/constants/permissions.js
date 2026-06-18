@@ -36,6 +36,10 @@ export const PERMISSIONS = Object.freeze({
 
   REPORTS_VIEW: 'reports.view',
 
+  NOTIFICATIONS_VIEW_ALL:    'notifications.view_all',
+  NOTIFICATIONS_CLOCK:       'notifications.clock',
+  NOTIFICATIONS_LEAVE_APPLY: 'notifications.leave_apply',
+
   ROLES_MANAGE:       'roles.manage',
   DEPARTMENTS_MANAGE: 'departments.manage',
 });
@@ -53,6 +57,7 @@ export const PERMISSION_GROUPS = [
   {label: 'Announcements', keys: ['announcements.view', 'announcements.manage']},
   {label: 'Events',        keys: ['events.view']},
   {label: 'Reports',       keys: ['reports.view']},
+  {label: 'Notifications', keys: ['notifications.view_all', 'notifications.clock', 'notifications.leave_apply']},
   {label: 'Admin',         keys: ['roles.manage', 'departments.manage']},
 ];
 
@@ -81,6 +86,9 @@ export const PERMISSION_LABELS = {
   'announcements.manage': 'Post announcements',
   'events.view':          'View events',
   'reports.view':         'View reports',
-  'roles.manage':         'Manage roles',
-  'departments.manage':   'Manage departments',
+  'notifications.view_all':    'View all organisation notifications',
+  'notifications.clock':       'Receive clock in / clock out alerts',
+  'notifications.leave_apply': 'Receive new leave request alerts',
+  'roles.manage':              'Manage roles',
+  'departments.manage':        'Manage departments',
 };

@@ -2,13 +2,14 @@ import React, {useState, useMemo} from 'react';
 import {
   View, ScrollView, StyleSheet, Alert, Modal, TextInput,
   TouchableOpacity, RefreshControl, FlatList,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AppHeader} from '@components/common';
-import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar} from '@components/ui';
+import {AppText, Card, Button, Badge, Spinner, EmptyState, Avatar, DateField} from '@components/ui';
 import {
   Play, Pause, CheckCircle, XCircle, RotateCcw,
-  Plus, X, Search, UserCheck, ClipboardList,
+  Plus, X, Search, ClipboardList,
 } from 'lucide-react-native';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
@@ -25,6 +26,8 @@ import {
   useRestartTaskMutation,
 } from '@features/task/taskApi';
 import {useListEmployeesQuery} from '@features/employee/employeeApi';
+import {useListProjectOptionsQuery} from '@features/project/projectApi';
+import {getDisplayTimezone} from '@utils/format';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -56,85 +59,6 @@ function filterTasks(tasks, filter) {
   }
 }
 
-// ── Employee picker (used inside CreateTaskModal) ───────────────────────────
-
-function EmpPickerSheet({visible, onClose, onSelect, selectedId}) {
-  const colors = useColors();
-  const [search, setSearch] = useState('');
-
-  const {data: empData, isLoading} = useListEmployeesQuery({pageSize: 200}, {skip: !visible});
-  const employees = Array.isArray(empData) ? empData : (empData?.items ?? []);
-  const filtered = useMemo(() => {
-    if (!search.trim()) return employees;
-    const q = search.toLowerCase();
-    return employees.filter(e =>
-      `${e.firstName} ${e.lastName}`.toLowerCase().includes(q) ||
-      e.email?.toLowerCase().includes(q),
-    );
-  }, [employees, search]);
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={[styles.overlay, {backgroundColor: colors.overlay}]}>
-        <View style={[styles.pickerSheet, {backgroundColor: colors.surface}]}>
-          <View style={styles.pickerHeader}>
-            <AppText style={[styles.pickerTitle, {color: colors.text}]}>Assign To</AppText>
-            <TouchableOpacity onPress={onClose}>
-              <X size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Search */}
-          <View style={[styles.pickerSearch, {backgroundColor: colors.surfaceAlt, borderColor: colors.border}]}>
-            <Search size={15} color={colors.textTertiary} />
-            <TextInput
-              style={[styles.pickerSearchInput, {color: colors.text}]}
-              value={search} onChangeText={setSearch}
-              placeholder="Search employee…"
-              placeholderTextColor={colors.textTertiary}
-              autoCapitalize="none" autoCorrect={false}
-            />
-          </View>
-
-          {isLoading ? (
-            <View style={styles.pickerCenter}><Spinner size="small" /></View>
-          ) : (
-            <FlatList
-              data={filtered}
-              keyExtractor={e => e.id}
-              style={styles.pickerList}
-              renderItem={({item}) => {
-                const name = `${item.firstName} ${item.lastName}`;
-                const isChosen = selectedId === item.id;
-                return (
-                  <TouchableOpacity
-                    onPress={() => { onSelect(item); onClose(); }}
-                    style={[styles.pickerRow, {borderBottomColor: colors.border}, isChosen && {backgroundColor: colors.primaryLight}]}
-                    activeOpacity={0.7}>
-                    <Avatar name={name} size="sm" />
-                    <View style={{flex: 1}}>
-                      <AppText style={[styles.pickerRowName, {color: colors.text}]}>{name}</AppText>
-                      {item.position && (
-                        <AppText style={{fontSize: fontSize.xs, color: colors.textSecondary}}>{item.position}</AppText>
-                      )}
-                    </View>
-                    {isChosen && <UserCheck size={16} color={colors.primary} />}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <AppText style={[styles.pickerEmpty, {color: colors.textSecondary}]}>
-                  No employees found
-                </AppText>
-              }
-            />
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 // ── Create Task Modal ──────────────────────────────────────────────────────
 
 export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, defaultAssigneeId}) {
@@ -144,14 +68,34 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
   const [title,        setTitle]        = useState('');
   const [description,  setDescription]  = useState('');
   const [assignedEmp,  setAssignedEmp]  = useState(null);
-  const [dueAt,        setDueAt]        = useState('');
-  const [notes,        setNotes]        = useState('');
+  const [projectId,    setProjectId]    = useState(''); // '' = Other
+  const [projOpen,     setProjOpen]     = useState(false);
+  const [dueAt,        setDueAt]         = useState('');
+  const [notes,        setNotes]         = useState('');
   const [empPicker,    setEmpPicker]    = useState(false);
+  const [empSearch,    setEmpSearch]    = useState('');
+
+  // Employees for the inline assignee dropdown (only when the user can assign).
+  const {data: empDataRaw} = useListEmployeesQuery({pageSize: 200}, {skip: !visible || !canAssign});
+  const filteredEmps = useMemo(() => {
+    const emps = Array.isArray(empDataRaw) ? empDataRaw : (empDataRaw?.items ?? []);
+    if (!empSearch.trim()) return emps;
+    const q = empSearch.toLowerCase();
+    return emps.filter(e => `${e.firstName} ${e.lastName}`.toLowerCase().includes(q));
+  }, [empDataRaw, empSearch]);
+
+  // Available to everyone (no projects.view permission needed) so any task gets a project.
+  const {data: projOptsData} = useListProjectOptionsQuery(undefined, {skip: !visible});
+  const projects   = Array.isArray(projOptsData) ? projOptsData : (projOptsData?.items ?? []);
+  const projectOpts = [{id: '', name: 'Other'}, ...projects];
+  const selectedProjectName = projectOpts.find(p => p.id === projectId)?.name ?? 'Other';
 
   // Reset on open
   React.useEffect(() => {
     if (visible) {
       setTitle(''); setDescription(''); setAssignedEmp(null);
+      setProjectId(''); setProjOpen(false);
+      setEmpPicker(false); setEmpSearch('');
       setDueAt(''); setNotes('');
     }
   }, [visible]);
@@ -161,6 +105,7 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
     const body = {
       title: title.trim(),
       description: description.trim() || undefined,
+      projectId: projectId || undefined,
       assignedToId: canAssign ? (assignedEmp?.id ?? defaultAssigneeId ?? undefined) : myEmpId ?? undefined,
       dueAt: dueAt.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -171,7 +116,9 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
   return (
     <>
       <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <View style={[styles.overlay, {backgroundColor: colors.overlay}]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[styles.overlay, {backgroundColor: colors.overlay}]}>
           <View style={[styles.sheet, {backgroundColor: colors.surface}]}>
             <View style={styles.sheetHeader}>
               <AppText style={[styles.sheetTitle, {color: colors.text}]}>New Task</AppText>
@@ -204,7 +151,7 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
                 <>
                   <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>ASSIGN TO</AppText>
                   <TouchableOpacity
-                    onPress={() => setEmpPicker(true)}
+                    onPress={() => setEmpPicker(o => !o)}
                     style={[styles.assigneeBtn, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}>
                     {assignedEmp ? (
                       <View style={styles.assigneeRow}>
@@ -219,20 +166,80 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
                       </AppText>
                     )}
                     <AppText style={{color: colors.primary, fontSize: fontSize.xs, fontWeight: fontWeight.semiBold}}>
-                      {assignedEmp ? 'Change' : 'Select'}
+                      {empPicker ? 'Close' : (assignedEmp ? 'Change' : 'Select')}
                     </AppText>
                   </TouchableOpacity>
+
+                  {empPicker && (
+                    <View style={[styles.projList, {borderColor: colors.border, backgroundColor: colors.surface}]}>
+                      <View style={[styles.empSearchRow, {borderBottomColor: colors.border}]}>
+                        <Search size={14} color={colors.textTertiary} />
+                        <TextInput
+                          style={{flex: 1, fontSize: fontSize.sm, color: colors.text, padding: 0}}
+                          value={empSearch} onChangeText={setEmpSearch}
+                          placeholder="Search employee…" placeholderTextColor={colors.textTertiary}
+                          autoCapitalize="none" autoCorrect={false}
+                        />
+                      </View>
+                      {filteredEmps.length === 0 ? (
+                        <AppText style={{textAlign: 'center', padding: spacing[3], fontSize: fontSize.sm, color: colors.textSecondary}}>
+                          No employees found
+                        </AppText>
+                      ) : (
+                        <ScrollView style={{maxHeight: 240}} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                          {filteredEmps.map(e => (
+                            <TouchableOpacity
+                              key={e.id}
+                              onPress={() => { setAssignedEmp(e); setEmpPicker(false); setEmpSearch(''); }}
+                              style={[styles.empOption, {borderBottomColor: colors.border}, assignedEmp?.id === e.id && {backgroundColor: colors.primaryLight}]}>
+                              <Avatar name={`${e.firstName} ${e.lastName}`} size="xs" />
+                              <AppText style={{flex: 1, fontSize: fontSize.sm, color: assignedEmp?.id === e.id ? colors.primary : colors.text}} numberOfLines={1}>
+                                {e.firstName} {e.lastName}
+                              </AppText>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      )}
+                    </View>
+                  )}
                 </>
               )}
 
+              {/* Project — every task belongs to one; "Other" is the default catch-all */}
+              <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>PROJECT</AppText>
+              <TouchableOpacity
+                onPress={() => setProjOpen(o => !o)}
+                style={[styles.assigneeBtn, {borderColor: colors.border, backgroundColor: colors.surfaceAlt}]}>
+                <AppText style={{flex: 1, fontSize: fontSize.sm, color: colors.text}} numberOfLines={1}>
+                  {selectedProjectName}
+                </AppText>
+                <AppText style={{color: colors.primary, fontSize: fontSize.xs, fontWeight: fontWeight.semiBold}}>
+                  {projOpen ? 'Close' : 'Change'}
+                </AppText>
+              </TouchableOpacity>
+              {projOpen && (
+                <View style={[styles.projList, {borderColor: colors.border, backgroundColor: colors.surface}]}>
+                  <ScrollView style={{maxHeight: 240}} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {projectOpts.map(p => (
+                      <TouchableOpacity
+                        key={p.id || 'other'}
+                        onPress={() => { setProjectId(p.id); setProjOpen(false); }}
+                        style={[styles.projOption, {borderBottomColor: colors.border}]}>
+                        <AppText style={{
+                          fontSize: fontSize.sm,
+                          color: p.id === projectId ? colors.primary : colors.text,
+                          fontWeight: p.id === projectId ? fontWeight.semiBold : fontWeight.regular,
+                        }}>
+                          {p.name}
+                        </AppText>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>DUE DATE (OPTIONAL)</AppText>
-              <TextInput
-                style={[styles.textInput, {borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text}]}
-                value={dueAt} onChangeText={setDueAt}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textTertiary}
-                keyboardType="numbers-and-punctuation"
-              />
+              <DateField value={dueAt} onChange={setDueAt} placeholder="Select due date" minimumDate={new Date()} />
 
               <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>NOTES</AppText>
               <TextInput
@@ -250,15 +257,8 @@ export function CreateTaskModal({visible, onClose, onSave, saving, canAssign, de
               />
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
-
-      <EmpPickerSheet
-        visible={empPicker}
-        onClose={() => setEmpPicker(false)}
-        onSelect={setAssignedEmp}
-        selectedId={assignedEmp?.id}
-      />
     </>
   );
 }
@@ -343,13 +343,13 @@ function TaskCard({task, canManage, myEmpId}) {
         )}
         {task.dueAt && (
           <AppText variant="caption" color={colors.textSecondary}>
-            📅 Due {new Date(task.dueAt).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'})}
+            📅 Due {new Date(task.dueAt).toLocaleDateString('en-AU', {timeZone: getDisplayTimezone(), day: 'numeric', month: 'short'})}
           </AppText>
         )}
         {/* Legacy field name support */}
         {!task.dueAt && task.dueDate && (
           <AppText variant="caption" color={colors.textSecondary}>
-            📅 Due {new Date(task.dueDate).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'})}
+            📅 Due {new Date(task.dueDate).toLocaleDateString('en-AU', {timeZone: getDisplayTimezone(), day: 'numeric', month: 'short'})}
           </AppText>
         )}
       </View>
@@ -594,9 +594,13 @@ const styles = StyleSheet.create({
   assigneeRow: {flexDirection: 'row', alignItems: 'center', gap: spacing[2]},
   assigneeName:{fontSize: fontSize.sm, fontWeight: fontWeight.medium},
   assigneePlaceholder:{fontSize: fontSize.sm},
+  projList:    {borderWidth: 1, borderRadius: radius.md, marginTop: spacing[1], overflow: 'hidden'},
+  projOption:  {paddingHorizontal: spacing[3], paddingVertical: spacing[3], borderBottomWidth: 1},
+  empSearchRow:{flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderBottomWidth: 1},
+  empOption:   {flexDirection: 'row', alignItems: 'center', gap: spacing[2], paddingHorizontal: spacing[3], paddingVertical: spacing[2], borderBottomWidth: 1},
 
   // Employee picker sheet
-  pickerSheet:      {borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing[5], paddingBottom: 0, maxHeight: '75%'},
+  pickerSheet:      {borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing[5], paddingBottom: 0, maxHeight: '85%', minHeight: '60%'},
   pickerHeader:     {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing[3]},
   pickerTitle:      {fontSize: fontSize.lg, fontWeight: fontWeight.bold},
   pickerSearch:     {flexDirection: 'row', alignItems: 'center', gap: spacing[2], borderWidth: 1, borderRadius: radius.md, paddingHorizontal: spacing[3], paddingVertical: spacing[3], marginBottom: spacing[2]},

@@ -2,8 +2,9 @@ import React, {useState} from 'react';
 import {
   View, StyleSheet, StatusBar, TextInput,
   TouchableOpacity, KeyboardAvoidingView,
-  ScrollView, Platform, ActivityIndicator,
+  ScrollView, Platform, ActivityIndicator, Image,
 } from 'react-native';
+import logo3 from '@assets/OnePulseWork_logo_1.png';
 import {Eye, EyeOff} from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AppText} from '@components/ui';
@@ -178,15 +179,21 @@ export default function LoginScreen({navigation, route}) {
 
           {/* ── Brand / Logo ── */}
           <View style={styles.brand}>
-            {/* Logo mark with glow ring */}
-            <View style={styles.logoGlow}>
-              <View style={styles.logoBox}>
-                <AppText style={styles.logoText}>CP</AppText>
-              </View>
-            </View>
+            <Image
+              source={logo3}
+              style={styles.logoImg}
+              resizeMode="contain"
+            />
 
-            {/* <AppText style={[styles.brandName, {color: C.text}]}>OnePulseWork</AppText> */}
-            <AppText style={[styles.brandName, {color: C.text}]}>CyberPulse</AppText>
+            <AppText style={[styles.brandName, {color: C.text}]}>
+              {'One'}
+              <AppText style={[styles.brandName, {color: '#7B61FF'}]}>P</AppText>
+              <AppText style={[styles.brandName, {color: '#6B70FF'}]}>u</AppText>
+              <AppText style={[styles.brandName, {color: '#5B7FFF'}]}>l</AppText>
+              <AppText style={[styles.brandName, {color: '#4B8FFF'}]}>s</AppText>
+              <AppText style={[styles.brandName, {color: '#3B9EFF'}]}>e</AppText>
+              {'Work'}
+            </AppText>
             <AppText style={[styles.brandSub, {color: C.muted}]}>
               Workforce management, simplified
             </AppText>
@@ -271,7 +278,7 @@ export default function LoginScreen({navigation, route}) {
           <View style={styles.footer}>
             <View style={[styles.footerDivider, {backgroundColor: C.divider}]} />
             <AppText style={[styles.footerText, {color: C.faint}]}>
-              © 2025 CyberPulse AU · Australia
+              © 2025 OnePulseWork · Australia
             </AppText>
             <View style={[styles.footerDivider, {backgroundColor: C.divider}]} />
           </View>
@@ -317,26 +324,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing[8],
   },
-  logoGlow: {
-    width: 96, height: 96, borderRadius: 28,
-    backgroundColor: 'rgba(123,97,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: spacing[5],
-    shadowColor: '#7B61FF',
-    shadowOffset: {width: 0, height: 0},
-    shadowOpacity: 0.8, shadowRadius: 24, elevation: 12,
-  },
-  logoBox: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: '#7B61FF',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#7B61FF',
-    shadowOffset: {width: 0, height: 6},
-    shadowOpacity: 0.6, shadowRadius: 14, elevation: 8,
-  },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 26, fontWeight: fontWeight.bold, letterSpacing: 1,
+  logoImg: {
+    width: 200, height: 72,
+    marginBottom: spacing[3],
   },
   brandName: {
     fontSize: 24, fontWeight: fontWeight.bold,

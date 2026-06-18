@@ -2,8 +2,9 @@ import React, {useState, useRef} from 'react';
 import {
   View, StyleSheet, TextInput, TouchableOpacity,
   KeyboardAvoidingView, ScrollView, Platform,
-  ActivityIndicator, StatusBar,
+  ActivityIndicator, StatusBar, Image,
 } from 'react-native';
+import logo3 from '@assets/OnePulseWork_logo_1.png';
 import {Eye, EyeOff} from 'lucide-react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {AppText} from '@components/ui';
@@ -177,11 +178,16 @@ export default function ForgotPasswordScreen({navigation}) {
 
           {/* Logo mark */}
           <View style={styles.brand}>
-            <View style={styles.logoGlow}>
-              <View style={styles.logoBox}>
-                <AppText style={styles.logoText}>CP</AppText>
-              </View>
-            </View>
+            <Image source={logo3} style={styles.logoImg} resizeMode="contain" />
+            <AppText style={[styles.brandName, {color: C.text}]}>
+              {'One'}
+              <AppText style={[styles.brandName, {color: '#7B61FF'}]}>P</AppText>
+              <AppText style={[styles.brandName, {color: '#6B70FF'}]}>u</AppText>
+              <AppText style={[styles.brandName, {color: '#5B7FFF'}]}>l</AppText>
+              <AppText style={[styles.brandName, {color: '#4B8FFF'}]}>s</AppText>
+              <AppText style={[styles.brandName, {color: '#3B9EFF'}]}>e</AppText>
+              {'Work'}
+            </AppText>
           </View>
 
           {/* Card */}
@@ -308,19 +314,8 @@ const styles = StyleSheet.create({
   backLabel: {fontSize: fontSize.sm, fontWeight: fontWeight.medium},
 
   brand: {alignItems: 'center', marginBottom: spacing[6]},
-  logoGlow: {
-    width: 80, height: 80, borderRadius: 24,
-    backgroundColor: 'rgba(123,97,255,0.18)',
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#7B61FF', shadowOffset: {width: 0, height: 0},
-    shadowOpacity: 0.7, shadowRadius: 20, elevation: 10,
-  },
-  logoBox: {
-    width: 60, height: 60, borderRadius: 16,
-    backgroundColor: '#7B61FF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  logoText: {color: '#FFFFFF', fontSize: 22, fontWeight: fontWeight.bold, letterSpacing: 1},
+  logoImg: {width: 200, height: 72, marginBottom: spacing[3]},
+  brandName: {fontSize: 24, fontWeight: fontWeight.bold, letterSpacing: 0.3},
 
   card: {
     borderWidth: 1, borderRadius: 24, padding: spacing[6], overflow: 'hidden',

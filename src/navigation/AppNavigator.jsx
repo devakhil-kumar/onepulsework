@@ -15,6 +15,7 @@ import {setStackNav} from '@navigation/stackNav';
 import DashboardScreen from '@screens/app/DashboardScreen';
 import AttendanceScreen from '@screens/app/AttendanceScreen';
 import LeaveScreen from '@screens/app/LeaveScreen';
+import ShiftsScreen from '@screens/app/ShiftsScreen';
 import NotificationsScreen from '@screens/app/NotificationsScreen';
 import RolesScreen from '@screens/admin/RolesScreen';
 import DepartmentsScreen from '@screens/admin/DepartmentsScreen';
@@ -23,6 +24,7 @@ import UsersScreen from '@screens/admin/UsersScreen';
 import ProfileScreen from '@screens/profile/ProfileScreen';
 import AnnouncementsScreen from '@screens/app/AnnouncementsScreen';
 import EventsScreen from '@screens/app/EventsScreen';
+import HolidaysScreen from '@screens/app/HolidaysScreen';
 import TasksScreen from '@screens/app/TasksScreen';
 import EmployeesScreen from '@screens/admin/EmployeesScreen';
 import EmployeeDetailScreen from '@screens/admin/EmployeeDetailScreen';
@@ -32,6 +34,7 @@ import ProjectsScreen from '@screens/app/ProjectsScreen';
 import JobsScreen from '@screens/app/JobsScreen';
 import PayslipsScreen from '@screens/app/PayslipsScreen';
 import PayrollDetailScreen from '@screens/app/PayrollDetailScreen';
+import NotificationPreferencesScreen from '@screens/app/NotificationPreferencesScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -109,16 +112,19 @@ export default function AppNavigator() {
           gestureEnabled: true,
         }}>
         <Stack.Screen name="Main"              component={MainShell} />
-        <Stack.Screen name="Notifications"     component={NotificationsScreen} />
+        <Stack.Screen name="Notifications"            component={NotificationsScreen} />
+        <Stack.Screen name="NotificationPreferences"  component={NotificationPreferencesScreen} />
         <Stack.Screen name="Roles"             component={RolesScreen} />
         <Stack.Screen name="Departments"       component={DepartmentsScreen} />
         <Stack.Screen name="OrgSettings"       component={OrgSettingsScreen} />
         <Stack.Screen name="Users"             component={UsersScreen} />
         <Stack.Screen name="Announcements"     component={AnnouncementsScreen} />
         <Stack.Screen name="Events"            component={EventsScreen} />
+        <Stack.Screen name="Holidays"          component={HolidaysScreen} />
         <Stack.Screen name="Tasks"             component={TasksScreen} />
         <Stack.Screen name="Employees"         component={EmployeesScreen} />
         <Stack.Screen name="EmployeeDetail"    component={EmployeeDetailScreen} />
+        <Stack.Screen name="Shifts"            component={ShiftsScreen} />
         <Stack.Screen name="Documents"         component={DocumentsScreen} />
         <Stack.Screen name="AttendanceHistory" component={AttendanceHistoryScreen} />
         <Stack.Screen name="Projects"          component={ProjectsScreen} />

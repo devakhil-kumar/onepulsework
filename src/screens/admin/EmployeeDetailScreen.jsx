@@ -666,7 +666,7 @@ export default function EmployeeDetailScreen() {
   const isAdmin    = useAppSelector(selectIsAdmin);
   const canManage  = useAppSelector(selectCanManage);
   const canPayroll = useAppSelector(selectHasPerm('payroll.manage'));
-  const canEdit    = isAdmin || canManage;
+  const canEdit    = useAppSelector(selectHasPerm('employees.edit'));
 
   const [activeTab,  setActiveTab]  = useState('details');
   const [periodIdx,  setPeriodIdx]  = useState(0);

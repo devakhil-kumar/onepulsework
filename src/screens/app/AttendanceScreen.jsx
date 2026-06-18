@@ -13,7 +13,7 @@ import {
 } from 'lucide-react-native';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
-import {formatTime, formatHours} from '@utils/format';
+import {formatTime, formatHours, getDisplayTimezone} from '@utils/format';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin, selectEmployeeId} from '@features/auth/authSlice';
 import {
@@ -381,7 +381,7 @@ function TaskCard({task, canManage, myEmpId}) {
         )}
         {(task.dueAt || task.dueDate) && (
           <AppText variant="caption" color={colors.textSecondary}>
-            📅 Due {new Date(task.dueAt ?? task.dueDate).toLocaleDateString('en-AU', {day: 'numeric', month: 'short'})}
+            📅 Due {new Date(task.dueAt ?? task.dueDate).toLocaleDateString('en-AU', {timeZone: getDisplayTimezone(), day: 'numeric', month: 'short'})}
           </AppText>
         )}
       </View>
@@ -892,7 +892,7 @@ export default function AttendanceScreen() {
             {formatTime(now)}
           </AppText>
           <AppText variant="bodySmall" color={colors.textSecondary}>
-            {now.toLocaleDateString('en-AU', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}
+            {now.toLocaleDateString('en-AU', {timeZone: getDisplayTimezone(), weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'})}
           </AppText>
 
           {shift && (

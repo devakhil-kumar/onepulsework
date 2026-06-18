@@ -14,6 +14,7 @@ import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
 import {selectHasPerm, selectIsAdmin} from '@features/auth/authSlice';
+import {formatDate as fmtDate, formatDateTime as fmtDateTime} from '@utils/format';
 import {
   useListJobsQuery, useCreateJobMutation,
   useUpdateJobMutation, useDeleteJobMutation,
@@ -85,19 +86,6 @@ const FILTERS = [
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function fmtDate(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-AU', {day: 'numeric', month: 'short', year: 'numeric'});
-}
-
-function fmtDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const date = d.toLocaleDateString('en-AU', {day: 'numeric', month: 'short'});
-  const time = d.toLocaleTimeString('en-AU', {hour: 'numeric', minute: '2-digit'});
-  return `${date}, ${time}`;
-}
-
 function toISOInput(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -111,15 +99,15 @@ function EmpPickerSheet({visible, onClose, onSelect, selectedId}) {
   const [search, setSearch] = useState('');
 
   const {data: empData, isLoading} = useListEmployeesQuery({pageSize: 200}, {skip: !visible});
-  const employees = Array.isArray(empData) ? empData : (empData?.items ?? []);
   const filtered = useMemo(() => {
+    const employees = Array.isArray(empData) ? empData : (empData?.items ?? []);
     if (!search.trim()) return employees;
     const q = search.toLowerCase();
     return employees.filter(e =>
       `${e.firstName} ${e.lastName}`.toLowerCase().includes(q) ||
       e.email?.toLowerCase().includes(q),
     );
-  }, [employees, search]);
+  }, [empData, search]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>

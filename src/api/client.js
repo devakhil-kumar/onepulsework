@@ -8,8 +8,8 @@ const DEV_URL = Platform.OS === 'android'
   ? 'http://192.168.29.100:4000'
   : 'http://localhost:4000';
 
-const BASE_URL = __DEV__ ? DEV_URL : 'https://api.cyberpulse.au';
-
+// const BASE_URL = __DEV__ ? DEV_URL : 'https://onepulsework.com:4000';
+const BASE_URL =  'https://onepulsework.com';
 let _store = null;
 
 export function injectStore(store) {

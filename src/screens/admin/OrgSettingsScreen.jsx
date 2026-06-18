@@ -1,8 +1,9 @@
 import React, {useState, useEffect} from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Switch, KeyboardAvoidingView, Platform, TextInput,
+  Alert, Switch, KeyboardAvoidingView, Platform, TextInput, Image, ActivityIndicator,
 } from 'react-native';
+import {launchImageLibrary} from 'react-native-image-picker';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {useNavigation} from '@react-navigation/native';
 import {ArrowLeft, Building2, Clock, DollarSign, TrendingUp, CalendarDays, PiggyBank, RefreshCw, Receipt} from 'lucide-react-native';
@@ -13,6 +14,7 @@ import {AppHeader} from '@components/common';
 import {
   useGetOrgInfoQuery,
   useUpdateOrgInfoMutation,
+  useUploadOrgLogoMutation,
   useGetPayrollPolicyQuery,
   useUpdatePayrollPolicyMutation,
 } from '@features/admin/adminApi';
@@ -215,8 +217,9 @@ function TabBar({active, onChange}) {
 
 // ── Organisation tab ─────────────────────────────────────────────────────────
 
-function OrgTab({org, saving, onSave}) {
+function OrgTab({org, saving, onSave, onUploadLogo, uploadingLogo}) {
   const colors = useColors();
+  const [logoPreview, setLogoPreview] = useState(null);
   const [form, setForm] = useState({
     name:         org?.name         ?? '',
     legalName:    org?.legalName    ?? '',
@@ -247,11 +250,57 @@ function OrgTab({org, saving, onSave}) {
 
   const set = key => val => setForm(f => ({...f, [key]: val}));
 
+  const pickLogo = () => {
+    launchImageLibrary({mediaType: 'photo', quality: 0.8, selectionLimit: 1}, res => {
+      if (res.didCancel || res.errorCode) return;
+      const asset = res.assets?.[0];
+      if (!asset) return;
+      setLogoPreview(asset.uri);
+      onUploadLogo({uri: asset.uri, name: asset.fileName ?? 'logo.jpg', type: asset.type ?? 'image/jpeg'});
+    });
+  };
+
+  const logoSrc = logoPreview || org?.logoUrl;
+
   return (
     <ScrollView
       contentContainerStyle={styles.tabScroll}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled">
+
+      {/* ── Logo section ── */}
+      <SectionCard title="Organisation Logo">
+        <View style={styles.logoRow}>
+          <TouchableOpacity onPress={pickLogo} disabled={uploadingLogo} style={styles.logoCircle} activeOpacity={0.75}>
+            {logoSrc ? (
+              <Image source={{uri: logoSrc}} style={styles.logoImg} resizeMode="contain" />
+            ) : (
+              <AppText style={[styles.logoInitial, {color: colors.primary}]}>
+                {org?.name?.charAt(0)?.toUpperCase() ?? '?'}
+              </AppText>
+            )}
+            {uploadingLogo && (
+              <View style={styles.logoOverlay}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            )}
+          </TouchableOpacity>
+          <View style={{flex: 1}}>
+            <AppText style={[styles.logoHint, {color: colors.text}]}>
+              {org?.name ?? 'Your Organisation'}
+            </AppText>
+            <AppText style={[styles.logoSubHint, {color: colors.textSecondary}]}>
+              Tap the circle to change your logo.{'\n'}Square image works best — shown in sidebar.
+            </AppText>
+            <TouchableOpacity onPress={pickLogo} disabled={uploadingLogo} style={[styles.logoBtn, {borderColor: colors.border, backgroundColor: colors.surface}]} activeOpacity={0.7}>
+              <AppText style={[styles.logoBtnText, {color: colors.primary}]}>
+                {uploadingLogo ? 'Uploading…' : 'Upload logo'}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SectionCard>
+
       <SectionCard title="Organisation Details">
         <Row>
           <StyledInput label="ORGANISATION NAME *" value={form.name} onChangeText={set('name')} autoCapitalize="words" />
@@ -452,6 +501,7 @@ function PayrollTab({policy, saving, onSave}) {
     overtimeTier2Rate:       policy?.overtimeTier2Rate       ?? 2.0,
     annualLeaveHoursPerYear: policy?.annualLeaveHoursPerYear ?? 152,
     sickLeaveHoursPerYear:   policy?.sickLeaveHoursPerYear   ?? 76,
+    ordinaryHoursPerDay:     policy?.ordinaryHoursPerDay     ?? 7.5,
     superRate:               policy?.superRate               ?? 0.115,
     payrollCycleType:        policy?.payrollCycleType        ?? 'fortnightly',
     taxScale:                policy?.taxScale                ?? 'scale1',
@@ -469,6 +519,7 @@ function PayrollTab({policy, saving, onSave}) {
       overtimeTier2Rate:       policy.overtimeTier2Rate       ?? 2.0,
       annualLeaveHoursPerYear: policy.annualLeaveHoursPerYear ?? 152,
       sickLeaveHoursPerYear:   policy.sickLeaveHoursPerYear   ?? 76,
+      ordinaryHoursPerDay:     policy.ordinaryHoursPerDay     ?? 7.5,
       superRate:               policy.superRate               ?? 0.115,
       payrollCycleType:        policy.payrollCycleType        ?? 'fortnightly',
       taxScale:                policy.taxScale                ?? 'scale1',
@@ -523,8 +574,12 @@ function PayrollTab({policy, saving, onSave}) {
         <PolicySectionHeader Icon={CalendarDays} title="Leave Entitlements" color="#10B981" />
         <View style={[styles.rateTable, {borderColor: colors.border, marginTop: spacing[3]}]}>
           <RateRow label="Annual Leave"       value={form.annualLeaveHoursPerYear} onChangeText={setNum('annualLeaveHoursPerYear')} min="152 h" unit="h" />
-          <RateRow label="Sick / Personal"    value={form.sickLeaveHoursPerYear}   onChangeText={setNum('sickLeaveHoursPerYear')}   min="76 h"  unit="h" isLast />
+          <RateRow label="Sick / Personal"    value={form.sickLeaveHoursPerYear}   onChangeText={setNum('sickLeaveHoursPerYear')}   min="76 h"  unit="h" />
+          <RateRow label="Paid hours / day"   value={form.ordinaryHoursPerDay}     onChangeText={setNum('ordinaryHoursPerDay')}     min="7.5 h" unit="h" isLast />
         </View>
+        <AppText style={[styles.sectionDesc, {color: colors.textSecondary, marginTop: spacing[2]}]}>
+          Paid hours in a full-time day — values one day of leave (e.g. 8h shift − 30m unpaid break = 7.5).
+        </AppText>
       </SectionCard>
 
       {/* Superannuation */}
@@ -608,6 +663,15 @@ export default function OrgSettingsScreen() {
   const {data: policy, isLoading: policyLoading} = useGetPayrollPolicyQuery();
   const [updateOrg,    {isLoading: savingOrg}]    = useUpdateOrgInfoMutation();
   const [updatePolicy, {isLoading: savingPolicy}] = useUpdatePayrollPolicyMutation();
+  const [uploadOrgLogo, {isLoading: uploadingLogo}] = useUploadOrgLogoMutation();
+
+  async function handleUploadLogo(file) {
+    try {
+      await uploadOrgLogo(file).unwrap();
+    } catch (err) {
+      Alert.alert('Upload failed', err.data ?? 'Could not upload logo.');
+    }
+  }
 
   async function handleSaveOrg(data) {
     if (!data.name?.trim()) { Alert.alert('Required', 'Organisation name is required.'); return; }
@@ -652,7 +716,7 @@ export default function OrgSettingsScreen() {
         <View style={styles.center}><Spinner /></View>
       ) : (
         <>
-          {activeTab === 'org'     && <OrgTab     org={org}    saving={savingOrg}    onSave={handleSaveOrg} />}
+          {activeTab === 'org'     && <OrgTab     org={org}    saving={savingOrg}    onSave={handleSaveOrg} onUploadLogo={handleUploadLogo} uploadingLogo={uploadingLogo} />}
           {activeTab === 'display' && <DisplayTab org={org}    saving={savingOrg}    onSave={handleSaveDisplay} />}
           {activeTab === 'payroll' && <PayrollTab policy={policy} saving={savingPolicy} onSave={handleSavePolicy} />}
         </>
@@ -809,4 +873,27 @@ const styles = StyleSheet.create({
   toggleDesc:  {fontSize: fontSize.xs, marginTop: 2},
 
   saveBtn: {marginBottom: spacing[2]},
+
+  logoRow: {flexDirection: 'row', alignItems: 'center', gap: spacing[4]},
+  logoCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    borderWidth: 2, borderColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', flexShrink: 0,
+  },
+  logoImg: {width: 72, height: 72, borderRadius: 36},
+  logoInitial: {fontSize: 28, fontWeight: fontWeight.bold},
+  logoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 36, backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  logoHint:    {fontSize: fontSize.sm, fontWeight: fontWeight.semiBold, marginBottom: 4},
+  logoSubHint: {fontSize: fontSize.xs, lineHeight: 16, marginBottom: spacing[2]},
+  logoBtn: {
+    alignSelf: 'flex-start', borderWidth: 1.5, borderRadius: radius.md,
+    paddingHorizontal: spacing[3], paddingVertical: spacing[2],
+  },
+  logoBtnText: {fontSize: fontSize.sm, fontWeight: fontWeight.semiBold},
 });

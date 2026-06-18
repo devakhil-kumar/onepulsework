@@ -1,8 +1,8 @@
 import React from 'react';
-import {View, TouchableOpacity, StyleSheet, StatusBar} from 'react-native';
+import {View, TouchableOpacity, StyleSheet, StatusBar, Image} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {Menu, Bell, ArrowLeft} from 'lucide-react-native';
-import {spacing, fontSize, fontWeight} from '@theme';
+import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import AppText from '@components/ui/AppText';
 import Avatar from '@components/ui/Avatar';
@@ -10,6 +10,7 @@ import {useDrawer} from '@app/DrawerContext';
 import {useAppSelector} from '@app/hooks';
 import {selectUser} from '@features/auth/authSlice';
 import {getStackNav} from '@navigation/stackNav';
+import logo2 from '@assets/OnePulseWork_logo_2.png';
 
 export default function AppHeader({title, showAvatar = false, unreadCount = 0, rightAction, showBack = false}) {
   const colors = useColors();
@@ -50,6 +51,7 @@ export default function AppHeader({title, showAvatar = false, unreadCount = 0, r
 
           <View style={styles.rightActions}>
             {rightAction}
+           
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => getStackNav()?.navigate('Notifications', {fromHeader: true})}
@@ -64,9 +66,11 @@ export default function AppHeader({title, showAvatar = false, unreadCount = 0, r
                 />
               )}
             </TouchableOpacity>
-            {showAvatar && (
-              <Avatar name={user?.fullName} size={32} style={styles.avatar} />
-            )}
+            <Image
+              source={logo2}
+              style={styles.orgLogo}
+              resizeMode="contain"
+            />
           </View>
         </View>
       </View>
@@ -106,4 +110,10 @@ const styles = StyleSheet.create({
     width: 7, height: 7, borderRadius: 4, borderWidth: 1,
   },
   avatar: {marginLeft: spacing[1]},
+  orgLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.sm,
+    // borderWidth: 1,
+  },
 });

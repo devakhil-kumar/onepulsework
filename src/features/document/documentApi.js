@@ -1,3 +1,5 @@
+import {Platform} from 'react-native';
+import RNBlobUtil from 'react-native-blob-util';
 import {apiSlice} from '@api/apiSlice';
 import {API} from '@constants/apiRoutes';
 import client from '@api/client';
@@ -60,4 +62,40 @@ export async function fetchDocumentBuffer(docId, inline = false) {
     responseType: 'arraybuffer',
   });
   return res.data;
+}
+
+// ── base64 (Hermes has no global btoa) ─────────────────────────────────────
+const B64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+export function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i];
+    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
+    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
+    out += B64_CHARS[b0 >> 2];
+    out += B64_CHARS[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? B64_CHARS[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    out += i + 2 < bytes.length ? B64_CHARS[b2 & 63] : '=';
+  }
+  return out;
+}
+
+/**
+ * Download a document (authenticated) to a temp file and open it in the
+ * device's native viewer — works for images, PDFs, and any other file type.
+ */
+export async function openDocumentInViewer(doc) {
+  const buffer = await fetchDocumentBuffer(doc.id, false);
+  const b64 = arrayBufferToBase64(buffer);
+  const safeName = (doc.fileName || `document_${doc.id}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${RNBlobUtil.fs.dirs.CacheDir}/${safeName}`;
+  await RNBlobUtil.fs.writeFile(path, b64, 'base64');
+  const mime = doc.mimeType || 'application/octet-stream';
+  if (Platform.OS === 'ios') {
+    await RNBlobUtil.ios.openDocument(path);
+  } else {
+    await RNBlobUtil.android.actionViewIntent(path, mime);
+  }
 }

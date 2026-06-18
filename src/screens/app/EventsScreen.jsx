@@ -2,16 +2,17 @@ import React, {useState, useMemo} from 'react';
 import {
   View, ScrollView, TouchableOpacity, StyleSheet,
   Alert, Modal, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import {ArrowLeft, Plus, Trash2, Calendar} from 'lucide-react-native';
+import {Plus, Trash2, Calendar, List, CalendarDays} from 'lucide-react-native';
 import {spacing, fontSize, fontWeight, radius} from '@theme';
 import {useColors} from '@app/ThemeContext';
 import {useAppSelector} from '@app/hooks';
-import {selectIsAdmin} from '@features/auth/authSlice';
-import {AppText, Avatar, Button, Spinner, EmptyState} from '@components/ui';
-import {AppHeader} from '@components/common';
+import {selectHasPerm} from '@features/auth/authSlice';
+import {AppText, Avatar, Button, Spinner, EmptyState, DateField} from '@components/ui';
+import {AppHeader, MonthCalendar} from '@components/common';
+import {getDisplayTimezone} from '@utils/format';
 import {
   useListEventsQuery,
   useCreateEventMutation,
@@ -55,7 +56,12 @@ function extractName(ev) {
 
 function formatDate(iso) {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-AU', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+  return d.toLocaleDateString('en-AU', {timeZone: getDisplayTimezone(), weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+}
+
+function ymd(iso) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ── Event card ─────────────────────────────────────────────────────────────
@@ -140,7 +146,9 @@ function AddEventModal({onClose, onSave, saving}) {
 
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
-      <View style={[styles.overlay, {backgroundColor: colors.overlay}]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={[styles.overlay, {backgroundColor: colors.overlay}]}>
         <View style={[styles.sheet, {backgroundColor: colors.surface}]}>
           <View style={styles.sheetHeader}>
             <AppText style={styles.sheetTitle}>Add Custom Event</AppText>
@@ -159,14 +167,7 @@ function AddEventModal({onClose, onSave, saving}) {
           />
 
           <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>DATE</AppText>
-          <TextInput
-            style={[styles.input, {borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text}]}
-            value={date}
-            onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={colors.textTertiary}
-            keyboardType="numbers-and-punctuation"
-          />
+          <DateField value={date} onChange={setDate} placeholder="Select date" />
 
           <AppText style={[styles.fieldLabel, {color: colors.textSecondary}]}>DESCRIPTION (OPTIONAL)</AppText>
           <TextInput
@@ -190,7 +191,7 @@ function AddEventModal({onClose, onSave, saving}) {
             style={{marginTop: spacing[3], marginBottom: spacing[6]}}
           />
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -204,14 +205,35 @@ const GROUPS = [
 ];
 
 export default function EventsScreen() {
-  const colors     = useColors();
-  const insets     = useSafeAreaInsets();
-  const navigation = useNavigation();
-  const isAdmin    = useAppSelector(selectIsAdmin);
+  const colors  = useColors();
+  const insets  = useSafeAreaInsets();
+  // OWNER/ADMIN (null permissions) and any role with announcements.manage can add events.
+  const canManage = useAppSelector(selectHasPerm('announcements.manage'));
 
   const [showAdd, setShowAdd] = useState(false);
+  const [view,     setView]     = useState('calendar'); // 'list' | 'calendar' — calendar shown first
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
+  const [calYear,  setCalYear]  = useState(new Date().getFullYear());
 
-  const {data: events = [], isLoading} = useListEventsQuery();
+  const shiftMonth = (delta) => {
+    let m = calMonth + delta;
+    let y = calYear;
+    if (m < 0) { m = 11; y -= 1; }
+    else if (m > 11) { m = 0; y += 1; }
+    setCalMonth(m);
+    setCalYear(y);
+  };
+
+  // List view → upcoming 30 days. Calendar view → the whole shown month.
+  const lastDay  = new Date(calYear, calMonth + 1, 0).getDate();
+  const calRange = view === 'calendar'
+    ? {
+        from: `${calYear}-${String(calMonth + 1).padStart(2, '0')}-01`,
+        to:   `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+      }
+    : undefined;
+
+  const {data: events = [], isLoading} = useListEventsQuery(calRange);
   const [createEvent, {isLoading: creating}] = useCreateEventMutation();
   const [deleteEvent] = useDeleteEventMutation();
 
@@ -253,11 +275,21 @@ export default function EventsScreen() {
 
   const hasEvents = (Array.isArray(events) ? events : []).length > 0;
 
+  // Calendar dot markers + the shown month's events
+  const eventMarkers = (Array.isArray(events) ? events : []).map(ev => ({
+    day:   ymd(ev.eventDate),
+    color: (EVENT_CONFIG[ev.eventType] ?? EVENT_CONFIG.CUSTOM).color,
+  }));
+  const monthEvents = (Array.isArray(events) ? events : []).filter(ev => {
+    const d = new Date(ev.eventDate);
+    return d.getFullYear() === calYear && d.getMonth() === calMonth;
+  });
+
   return (
     <View style={[styles.root, {backgroundColor: colors.background}]}>
       <AppHeader
         title="Events"
-        rightAction={isAdmin && (
+        rightAction={canManage && (
           <TouchableOpacity
             onPress={() => setShowAdd(true)}
             style={[styles.addBtn, {backgroundColor: colors.primary}]}>
@@ -266,16 +298,57 @@ export default function EventsScreen() {
         )}
       />
 
+      {/* View toggle: list / calendar */}
+      <View style={styles.toolbar}>
+        <View style={[styles.segment, {borderColor: colors.border}]}>
+          <TouchableOpacity
+            onPress={() => setView('list')}
+            style={[styles.segBtn, view === 'list' && {backgroundColor: colors.primary}]}>
+            <List size={16} color={view === 'list' ? '#fff' : colors.textSecondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setView('calendar')}
+            style={[styles.segBtn, view === 'calendar' && {backgroundColor: colors.primary}]}>
+            <CalendarDays size={16} color={view === 'calendar' ? '#fff' : colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {isLoading ? (
         <View style={styles.center}><Spinner /></View>
+      ) : view === 'calendar' ? (
+        <ScrollView
+          contentContainerStyle={[styles.scroll, {paddingBottom: insets.bottom + spacing[6]}]}
+          showsVerticalScrollIndicator={false}>
+          <MonthCalendar
+            year={calYear}
+            month={calMonth}
+            markers={eventMarkers}
+            onPrev={() => shiftMonth(-1)}
+            onNext={() => shiftMonth(1)}
+          />
+          <View style={{marginTop: spacing[5]}}>
+            {monthEvents.length === 0 ? (
+              <AppText style={[styles.monthEmpty, {color: colors.textTertiary}]}>No events this month</AppText>
+            ) : (
+              <View style={styles.grid}>
+                {monthEvents.map(ev => (
+                  <View key={ev.id} style={styles.gridItem}>
+                    <EventCard ev={ev} canManage={canManage} onDelete={() => confirmDelete(ev)} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </ScrollView>
       ) : !hasEvents ? (
         <View style={styles.center}>
           <EmptyState
             icon={<Calendar size={44} color={colors.primary} />}
             title="No upcoming events"
-            description={'Birthdays and work anniversaries will appear here automatically.' + (isAdmin ? '\nYou can also add custom events.' : '')}
+            description={'Birthdays and work anniversaries will appear here automatically.' + (canManage ? '\nYou can also add custom events.' : '')}
           />
-          {isAdmin && (
+          {canManage && (
             <Button
               label="Add Custom Event"
               variant="primary"
@@ -299,7 +372,7 @@ export default function EventsScreen() {
                     <View key={ev.id} style={styles.gridItem}>
                       <EventCard
                         ev={ev}
-                        canManage={isAdmin}
+                        canManage={canManage}
                         onDelete={() => confirmDelete(ev)}
                       />
                     </View>
@@ -338,6 +411,11 @@ const styles = StyleSheet.create({
   headerSub:   {fontSize: fontSize.xs, marginTop: 1},
   addBtn:      {width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center'},
   center:      {flex: 1, alignItems: 'center', justifyContent: 'center'},
+
+  toolbar: {flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacing[4], paddingVertical: spacing[2]},
+  segment: {flexDirection: 'row', borderWidth: 1, borderRadius: radius.md, overflow: 'hidden'},
+  segBtn:  {paddingHorizontal: spacing[4], paddingVertical: spacing[2], alignItems: 'center', justifyContent: 'center'},
+  monthEmpty: {textAlign: 'center', fontSize: fontSize.sm, paddingVertical: spacing[4]},
 
   scroll: {padding: spacing[4]},
   group:  {marginBottom: spacing[6]},
